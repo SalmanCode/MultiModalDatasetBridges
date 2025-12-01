@@ -1,0 +1,122 @@
+[
+  {
+    "identifier": "bridge_1",
+    "bridge_type": "box_girder",
+    "span_m": 105,
+    "deck_m": 107.0
+  },
+  {
+    "identifier": "bridge_2",
+    "bridge_type": "box_girder",
+    "span_m": 55,
+    "deck_m": 57.0
+  },
+  {
+    "identifier": "bridge_3",
+    "bridge_type": "box_girder",
+    "span_m": 80,
+    "deck_m": 82.0
+  },
+  {
+    "identifier": "bridge_4",
+    "bridge_type": "box_girder",
+    "span_m": 120,
+    "deck_m": 122.0
+  },
+  {
+    "identifier": "bridge_5",
+    "bridge_type": "box_girder",
+    "span_m": 90,
+    "deck_m": 92.0
+  },
+  {
+    "identifier": "bridge_6",
+    "bridge_type": "beam_slab",
+    "span_m": 35,
+    "deck_m": 37.0
+  },
+  {
+    "identifier": "bridge_7",
+    "bridge_type": "box_girder",
+    "span_m": 60,
+    "deck_m": 62.0
+  },
+  {
+    "identifier": "bridge_8",
+    "bridge_type": "beam_slab",
+    "span_m": 40,
+    "deck_m": 42.0
+  },
+  {
+    "identifier": "bridge_9",
+    "bridge_type": "box_girder",
+    "span_m": 120,
+    "deck_m": 122.0
+  },
+  {
+    "identifier": "bridge_10",
+    "bridge_type": "beam_slab",
+    "span_m": 30,
+    "deck_m": 32.0
+  },
+  {
+    "identifier": "bridge_11",
+    "bridge_type": "beam_slab",
+    "span_m": 45,
+    "deck_m": 47.0
+  },
+  {
+    "identifier": "bridge_12",
+    "bridge_type": "box_girder",
+    "span_m": 85,
+    "deck_m": 87.0
+  },
+  {
+    "identifier": "bridge_13",
+    "bridge_type": "beam_slab",
+    "span_m": 30,
+    "deck_m": 32.0
+  },
+  {
+    "identifier": "bridge_14",
+    "bridge_type": "box_girder",
+    "span_m": 95,
+    "deck_m": 97.0
+  },
+  {
+    "identifier": "bridge_15",
+    "bridge_type": "beam_slab",
+    "span_m": 50,
+    "deck_m": 52.0
+  },
+  {
+    "identifier": "bridge_16",
+    "bridge_type": "box_girder",
+    "span_m": 80,
+    "deck_m": 82.0
+  },
+  {
+    "identifier": "bridge_17",
+    "bridge_type": "box_girder",
+    "span_m": 55,
+    "deck_m": 57.0
+  },
+  {
+    "identifier": "bridge_18",
+    "bridge_type": "beam_slab",
+    "span_m": 25,
+    "deck_m": 27.0
+  },
+  {
+    "identifier": "bridge_19",
+    "bridge_type": "box_girder",
+    "span_m": 100,
+    "deck_m": 102.0
+  },
+  {
+    "identifier": "bridge_20",
+    "bridge_type": "beam_slab",
+    "span_m": 40,
+    "deck_m": 42.0
+  }
+]
