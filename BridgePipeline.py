@@ -9,7 +9,10 @@ from datetime import datetime
 import time
 import random
 
-from utils import BridgeConfig, generate_bridge_configs, configs_to_records, BridgeModel
+from config import BridgeConfig
+from param_gen import generate_bridge_configs, configs_to_records
+from geometry.bridge_model import BridgeModel
+
 
 
 logger = logging.getLogger(__name__)
@@ -33,18 +36,21 @@ class BridgePipeline:
         # Track generated bridges
         self.bridge_metadata: List[BridgeConfig] = []
 
-    def generate_bridges(self, num_bridges: int, step: int, include_sidewalks: bool, seed = None, overhang_m: float = 1.0) -> List[BridgeConfig]:
+    def generate_bridges(self, num_bridges: int, step: int, include_sidewalks: bool, seed: int | None = None, overhang_m: float = 1.0) -> List[BridgeConfig]:
         """Create bridge configs and keep them in-memory."""
 
+        # First we generate the bridge configs from config.py
         configs = generate_bridge_configs(count=num_bridges, step=step, include_sidewalks=include_sidewalks, seed=seed, overhang_m=overhang_m)
         self.bridge_metadata = configs
         logger.info("Generated %d bridge configs", len(configs))
 
+        # Then we convert the configs to records
         config_json = configs_to_records(configs)
 
         for config in configs:
+            # Then we build the bridge model from geometry.bridge_model.py
             bridge_model = BridgeModel(config)
-            bridge = bridge_model.build_bridge()
+            bridge = bridge_model.build_bridge() # this is building the bridge model from geometry.bridge_model.py
             stl_file = self.bridge_objects_dir / f"{config.bridge_id}.stl"
             cq.exporters.export(bridge, str(stl_file))
 

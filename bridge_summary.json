@@ -2,55 +2,43 @@
   {
     "bridge_id": "bridge_1",
     "bridge_type": "box_girder",
-    "span_m": 100,
+    "span_m": 65,
     "width_m": 18.5,
-    "deck_m": 102.0,
+    "deck_m": 67.0,
     "lanes": 5,
-    "include_sidewalks": false
+    "include_sidewalks": false,
+    "top_slab_thk": 0.25,
+    "bottom_slab_thk": 0.35,
+    "web_thk": 0.5,
+    "box_depth": null,
+    "deck_thickness": 0.3
   },
   {
     "bridge_id": "bridge_2",
     "bridge_type": "box_girder",
-    "span_m": 85,
+    "span_m": 105,
     "width_m": 11.5,
-    "deck_m": 87.0,
+    "deck_m": 107.0,
     "lanes": 3,
-    "include_sidewalks": false
+    "include_sidewalks": false,
+    "top_slab_thk": 0.25,
+    "bottom_slab_thk": 0.35,
+    "web_thk": 0.5,
+    "box_depth": null,
+    "deck_thickness": 0.3
   },
   {
     "bridge_id": "bridge_3",
-    "bridge_type": "box_girder",
-    "span_m": 70,
-    "width_m": 15.0,
-    "deck_m": 72.0,
-    "lanes": 4,
-    "include_sidewalks": false
-  },
-  {
-    "bridge_id": "bridge_4",
-    "bridge_type": "box_girder",
-    "span_m": 115,
+    "bridge_type": "beam_slab",
+    "span_m": 35,
     "width_m": 18.5,
-    "deck_m": 117.0,
+    "deck_m": 37.0,
     "lanes": 5,
-    "include_sidewalks": false
-  },
-  {
-    "bridge_id": "bridge_5",
-    "bridge_type": "box_girder",
-    "span_m": 80,
-    "width_m": 15.0,
-    "deck_m": 82.0,
-    "lanes": 4,
-    "include_sidewalks": false
-  },
-  {
-    "bridge_id": "bridge_6",
-    "bridge_type": "box_girder",
-    "span_m": 95,
-    "width_m": 18.5,
-    "deck_m": 97.0,
-    "lanes": 5,
-    "include_sidewalks": false
+    "include_sidewalks": false,
+    "top_slab_thk": 0.25,
+    "bottom_slab_thk": 0.35,
+    "web_thk": 0.5,
+    "box_depth": null,
+    "deck_thickness": 0.3
   }
 ]
