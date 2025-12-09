@@ -6,13 +6,19 @@ class BridgeConfig:
     bridge_id: str
     bridge_type: str
     span_m: float
+    num_spans: int
+    total_length_m: float
     width_m: float
-    deck_m: float
     lanes: int
     include_sidewalks: bool
+    depth_of_girder: float
+    number_of_piers_per_lane: int
+    radius_of_pier: float
+    pier_type: str
+    pier_cap_type: str
     top_slab_thk: float = 0.25
+    bridge_clearance_height: float = 5.0
     bottom_slab_thk: float = 0.35
     web_thk: float = 0.5
-    box_depth: Optional[float] = None
     deck_thickness: float = 0.3
     
