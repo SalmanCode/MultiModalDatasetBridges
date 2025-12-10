@@ -16,9 +16,11 @@ class BridgeConfig:
     radius_of_pier: float
     pier_type: str
     pier_cap_type: str
+    pier_cross_section: str
     top_slab_thk: float = 0.25
     bridge_clearance_height: float = 5.0
     bottom_slab_thk: float = 0.35
     web_thk: float = 0.5
     deck_thickness: float = 0.3
+    wing_wall_thickness: float = 0.5
     
