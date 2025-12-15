@@ -36,11 +36,11 @@ class BridgePipeline:
         # Track generated bridges
         self.bridge_metadata: List[BridgeConfig] = []
 
-    def generate_bridges(self, num_bridges: int, step: int, include_sidewalks: bool, seed: int | None = None, overhang_m: float = 1.0) -> List[BridgeConfig]:
+    def generate_bridges(self, num_bridges: int, bridge_type: str, step: int, include_sidewalks: bool, seed: int | None = None, overhang_m: float = 1.0) -> List[BridgeConfig]:
         """Create bridge configs and keep them in-memory."""
 
         # First we generate the bridge configs from config.py
-        configs = generate_bridge_configs(count=num_bridges, step=step, include_sidewalks=include_sidewalks, seed=seed, overhang_m=overhang_m)
+        configs = generate_bridge_configs(count=num_bridges, bridge_type=bridge_type, step=step, include_sidewalks=include_sidewalks, seed=seed, overhang_m=overhang_m)
         self.bridge_metadata = configs
         logger.info("Generated %d bridge configs", len(configs))
 

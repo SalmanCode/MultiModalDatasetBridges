@@ -167,7 +167,7 @@ class BridgeModel:
         """ this makes the railings for the bridge if safety is required"""
         """ this can return None if safety is not required"""
 
-        railing_pole_height = 1.0
+        railing_pole_height = 1.0 # this is taken from RZ standards
         railing_pole_distance = 2.5
         railing_pole_side_length = 0.07 # this is assuming that the pole is a square in xy plane with 7 cm side length
         deck_length = self.config.total_length_m 
@@ -232,32 +232,35 @@ class BridgeModel:
 
     def make_piers(self) -> Optional[cq.Workplane]:
 
-        bridge_clearance_height = getattr(self.config, "bridge_clearance_height", 5.0)
-         # this is the minimum clearance height from the girder to the ground
-        pier_positions = self.compute_pier_positions()
 
-        # currently implementing circular piers
-        num_of_piers = self.config.num_spans - 1
+        bridge_clearance_height = getattr(self.config, "bridge_clearance_height", 5.0) # this is the minimum clearance height from the girder to the ground
+         
         
-        piers = cq.Workplane("XY")
-        pier_caps = cq.Workplane("XY")
 
-
-        num_of_piers_per_lane = self.config.number_of_piers_per_lane
-        num_of_lanes = self.config.lanes
-        num_of_piers_longitude = num_of_piers_per_lane * num_of_lanes
+        # num of piers in x direction is same for both types of piers
+        num_of_piers_x = self.config.num_spans - 1 # this is the number of piers in the x direction
         
-        pier_spacing_y = self.config.width_m / num_of_piers_longitude
-        #logger.info(f"pier spacing y: {pier_spacing_y}")
-
-        cap_height = 0.5     # Right now assuming that the cap height is 1 meter
-        cap_thickness = self.config.radius_of_pier * 2
+        pier_positions_x = self.compute_pier_positions() # this is the list of positions of the piers in the x direction
 
         if self.config.pier_type == "multicolumn":
-            for i in range(num_of_piers):
-                pier_position_x = pier_positions[i]
-                for j in range(num_of_piers_longitude):
-                    pier_position_y = -((pier_spacing_y) * (num_of_piers_longitude - 1)/2) + pier_spacing_y * j
+            
+            piers = cq.Workplane("XY")
+            pier_caps = cq.Workplane("XY")
+
+
+            num_of_piers_per_lane = self.config.number_of_piers_per_lane
+            num_of_lanes = self.config.lanes
+            num_of_piers_y = num_of_piers_per_lane * num_of_lanes
+            
+            pier_spacing_y = self.config.width_m / num_of_piers_y
+            #logger.info(f"pier spacing y: {pier_spacing_y}")
+
+            cap_height = 0.5     # Right now assuming that the cap height is 1 meter
+            cap_thickness = self.config.radius_of_pier * 2
+            for i in range(num_of_piers_x):
+                pier_position_x = pier_positions_x[i]
+                for j in range(num_of_piers_y):
+                    pier_position_y = -((pier_spacing_y) * (num_of_piers_y - 1)/2) + pier_spacing_y * j
                     if self.config.pier_cross_section == "circular":
                         pier = cq.Workplane("XY").circle(self.config.radius_of_pier).extrude(-bridge_clearance_height).translate((pier_position_x, pier_position_y, - self.config.depth_of_girder - cap_height))
                     elif self.config.pier_cross_section == "rectangular":
@@ -266,6 +269,51 @@ class BridgeModel:
                 pier_cap = self.make_prismatic_pier_caps(cap_height, cap_thickness).translate((pier_position_x, 0, -self.config.depth_of_girder - cap_height))
                 pier_caps = pier_caps.union(pier_cap)
             piers = piers.union(pier_caps)
+        
+
+        if self.config.pier_type == "hammer_head":
+            num_of_piers_y, box_width = self.compute_box_girder_spacing()
+            piers = cq.Workplane("YZ")
+
+            pier_spacing_y = self.config.width_m / num_of_piers_y # this is to calculate the spacing between the piers accross the width of the bridge. This will be the same as the spacing between the cells in the box girder.
+
+            polygon_height = 1 # this is taken from literature. Check notion repository for more details.
+            polygon_slant_height = 1 # this is taken from literature. Check notion repository for more details.
+            if self.config.pier_cross_section == "circular":
+                polygon_lower_width = 2*self.config.radius_of_pier
+            elif self.config.pier_cross_section == "rectangular":
+                polygon_lower_width = 1.8 # this is in case of rectangular piers for hammerhead. from literature. Check notion repository for more details.
+            p1 = (box_width/2, 0)
+            p2 = (p1[0], - polygon_height)
+            p3 = (polygon_lower_width/2, -polygon_slant_height - polygon_height)
+            p4 = (0, p3[1])
+            p5 = (0 , 0)
+            cap_height = polygon_height + polygon_slant_height # this will be the height that is the sum of two lines one straigt and one slanted.
+            pier_thickness = 1.0 # assumed thickness of the pier column
+
+            points = [p1, p2, p3, p4, p5]
+            for i in range(num_of_piers_x):
+                pier_position_x = pier_positions_x[i]
+                for j in range(num_of_piers_y):
+                    # we will calculate the piers accross the width of the bridge
+                    pier_position_y = -((pier_spacing_y) * (num_of_piers_y - 1)/2) + pier_spacing_y * j
+
+                    # first making rectungular column
+                    if self.config.pier_cross_section == "circular":
+                        pier_column = cq.Workplane("XY").circle(self.config.radius_of_pier).extrude(-bridge_clearance_height)
+                    elif self.config.pier_cross_section == "rectangular":
+                        pier_column = cq.Workplane("YZ").rect(polygon_lower_width, -bridge_clearance_height).extrude(pier_thickness, both=True)
+                   
+                    pier_column = pier_column.translate((pier_position_x, pier_position_y, - self.config.depth_of_girder - cap_height ))
+
+                    # then making the hammer head shape ( pier cap)
+                    pier_cap = cq.Workplane("YZ").polyline(points).close().extrude(pier_thickness, both=True)
+                    pier_cap_mirror = pier_cap.mirror("XZ")
+                    pier_cap = pier_cap.union(pier_cap_mirror)
+                    pier_cap = pier_cap.translate((pier_position_x, pier_position_y, - self.config.depth_of_girder ))
+                    piers = piers.union(pier_column)
+                    piers = piers.union(pier_cap)
+
         return piers
         
 

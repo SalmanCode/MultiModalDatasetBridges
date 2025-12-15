@@ -37,25 +37,29 @@ def pick_deck_width(lanes: int, include_sidewalks: bool) -> float:
     paved_width = lanes * lane_width + 2 * (hard_shoulder + hard_strip)
     return round(paved_width + 2 * sidewalk, 2)
 
-def piers_combination(lanes: int, rng: random.Random) -> int:
+def piers_combination(lanes: int, rng: random.Random, bridge_type: str) -> int:
     #num_of_piers_per_lane = rng.randint(1,2) # this is the number of piers per lane
     num_of_piers_per_lane = 1 # right now we just keep equal to 1 per lane
     radius_of_pier = 0.6 # this is the radius of the pier in meters from oregon state standards
-    type_of_pier = rng.choice(["multicolumn"])
+    if bridge_type == "box_girder":
+        type_of_pier = rng.choice(["hammer_head"])
+    else:
+        type_of_pier = rng.choice(["multicolumn"])
+    
     pier_cap_type = rng.choice(["prismatic"])
     pier_cross_section = rng.choice(["circular", "rectangular"])
     return num_of_piers_per_lane, radius_of_pier, type_of_pier, pier_cap_type, pier_cross_section
 
 
-def generate_bridge_configs(count: int, step: int, include_sidewalks: bool, seed: int | None = None, overhang_m: float = 1.0) -> List[BridgeConfig]:
+def generate_bridge_configs(count: int, bridge_type: str, step: int, include_sidewalks: bool, seed: int | None = None, overhang_m: float = 1.0) -> List[BridgeConfig]:
     rng = random.Random(seed)
     configs: List[BridgeConfig] = []
     for idx in range(1, count + 1):
-        bridge_type = rng.choice(list(BRIDGE_SPECS.keys()))
+        bridge_type = bridge_type if bridge_type is not None else rng.choice(list(BRIDGE_SPECS.keys()))
         lanes = rng.randint(2, 5)
         span, num_spans, total_length, depth_of_girder = pick_span(bridge_type, rng, step, overhang_m)
         width = pick_deck_width(lanes, include_sidewalks)
-        number_of_piers_per_lane, radius_of_pier, type_of_pier, pier_cap_type, pier_cross_section = piers_combination(lanes, rng)
+        number_of_piers_per_lane, radius_of_pier, type_of_pier, pier_cap_type, pier_cross_section = piers_combination(lanes, rng, bridge_type)
         configs.append(BridgeConfig(
             bridge_id=f"bridge_{idx}", 
             bridge_type=bridge_type, 
