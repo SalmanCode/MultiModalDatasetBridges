@@ -403,12 +403,18 @@ class BridgeModel:
             self.config.bridge_clearance_height,
             back_wall_thickness,
             centered=(True, False, False)
-        ).translate((self.config.total_length_m/2 - 2, 0, -self.config.depth_of_girder - self.config.bridge_clearance_height))
-        
+        ).translate((self.config.total_length_m/2 - back_wall_thickness, 0, -self.config.depth_of_girder - self.config.bridge_clearance_height))       
         # Back retaining wall
-        wall_mirror = back_wall.mirror("YZ")
+        wall_mirror = back_wall.mirror("YZ")  
+    
         
-        return back_wall.union(wall_mirror)
+        # this adds a thinner wall at the end of back wall to close the end of girders.
+        thinner_wall = cq.Workplane("YZ").box(self.config.width_m - 2 * self.config.wing_wall_thickness, self.config.bridge_clearance_height + self.config.depth_of_girder, 0.5, centered=(True, False, False))
+        thinner_wall = thinner_wall.translate((self.config.total_length_m/2, 0, -self.config.bridge_clearance_height - self.config.depth_of_girder))    
+        thinner_wall_mirror = thinner_wall.mirror("YZ")
+        thinner_wall_combined = thinner_wall.union(thinner_wall_mirror)
+        
+        return back_wall.union(wall_mirror).union(thinner_wall_combined)
 
     
     def build_bridge(self) -> cq.Workplane:
@@ -422,8 +428,5 @@ class BridgeModel:
         bridge = bridge.union(self.make_railings())
         bridge = bridge.union(self.make_piers())
         bridge = bridge.union(self.make_wing_walls())
-        
-       
-
-        
+        bridge = bridge.union(self.make_back_walls())
         return bridge

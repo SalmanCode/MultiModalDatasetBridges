@@ -53,6 +53,16 @@ class BridgePipeline:
             bridge = bridge_model.build_bridge() # this is building the bridge model from geometry.bridge_model.py
             stl_file = self.bridge_objects_dir / f"{config.bridge_id}.stl"
             cq.exporters.export(bridge, str(stl_file))
+            mesh = o3d.io.read_triangle_mesh(str(stl_file))
+            obj_file = self.bridge_objects_dir / f"{config.bridge_id}.obj"
+            if len(mesh.vertices) > 0:
+                o3d.io.write_triangle_mesh(str(obj_file), mesh)
+                # Clean up STL file
+                stl_file.unlink()
+                logger.info(f"Successfully saved bridge {config.bridge_id} to {obj_file}")
+            else:
+                logger.error(f"Failed to generate valid mesh for bridge {config.bridge_id}")
+                return
 
         return configs, config_json
 

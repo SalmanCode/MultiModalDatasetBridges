@@ -10,7 +10,7 @@ import json
 def main():
     parser = argparse.ArgumentParser(description="Generate synthetic bridge datasets")
     parser.add_argument("num_bridges", type=int, help="Number of bridges to generate", default=20)
-    parser.add_argument("--bridge_type", type=str, help="Type of girder to generate (default: beam_slab)", default="beam_slab")
+    parser.add_argument("--bridge_type", type=str, help="Type of girder to generate (beam_slab, box_girder)", default=None)
     parser.add_argument("--step", type=int, help="Step size for the bridge span", default=5)
     parser.add_argument("--include_sidewalks", action="store_true", help="Include sidewalks")
     parser.add_argument("--missing_components", action="store_true", help="Include missing components")

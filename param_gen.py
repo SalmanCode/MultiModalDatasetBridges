@@ -55,14 +55,14 @@ def generate_bridge_configs(count: int, bridge_type: str, step: int, include_sid
     rng = random.Random(seed)
     configs: List[BridgeConfig] = []
     for idx in range(1, count + 1):
-        bridge_type = bridge_type if bridge_type is not None else rng.choice(list(BRIDGE_SPECS.keys()))
+        bridge_type_picked = bridge_type or rng.choice(list(BRIDGE_SPECS.keys()))
         lanes = rng.randint(2, 5)
-        span, num_spans, total_length, depth_of_girder = pick_span(bridge_type, rng, step, overhang_m)
+        span, num_spans, total_length, depth_of_girder = pick_span(bridge_type_picked, rng, step, overhang_m)
         width = pick_deck_width(lanes, include_sidewalks)
-        number_of_piers_per_lane, radius_of_pier, type_of_pier, pier_cap_type, pier_cross_section = piers_combination(lanes, rng, bridge_type)
+        number_of_piers_per_lane, radius_of_pier, type_of_pier, pier_cap_type, pier_cross_section = piers_combination(lanes, rng, bridge_type_picked)
         configs.append(BridgeConfig(
             bridge_id=f"bridge_{idx}", 
-            bridge_type=bridge_type, 
+            bridge_type=bridge_type_picked, 
             span_m=span,
             num_spans=num_spans,
             total_length_m=total_length,
