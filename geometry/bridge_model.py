@@ -1,7 +1,7 @@
 import cadquery as cq
 from config import BridgeConfig
 from dataclasses import asdict
-from typing import Optional
+from typing import Optional, Dict
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -417,16 +417,42 @@ class BridgeModel:
         return back_wall.union(wall_mirror).union(thinner_wall_combined)
 
     
-    def build_bridge(self) -> cq.Workplane:
-        """Build the complete bridge with optional components"""
+    def build_bridge(self, with_components: bool = False) -> cq.Workplane | Dict[str, cq.Workplane]:
+        """
+        Build the bridge geometry.
+
+        Args:
+            as_components: When True, return each component individually instead of a
+                single boolean union.
+
+        Returns:
+            Either a combined cq.Workplane or a dict of component solids.
+        """
         logger.info(f"****BRIDGE {self.config.bridge_id} type: {self.config.bridge_type}****")
         logger.info(f"Building bridge {self.config.bridge_id} with config: {asdict(self.config)}")
         
-        # Start with deck
-        bridge = self.make_deck()
-        bridge = bridge.union(self.make_approach_slabs())
-        bridge = bridge.union(self.make_railings())
-        bridge = bridge.union(self.make_piers())
-        bridge = bridge.union(self.make_wing_walls())
-        bridge = bridge.union(self.make_back_walls())
-        return bridge
+        components: Dict[str, cq.Workplane | None] = {
+            "deck": self.make_deck(),
+            "approach_slabs": self.make_approach_slabs(),
+            "railings": self.make_railings(),
+            "piers": self.make_piers(),
+            "wing_walls": self.make_wing_walls(),
+            "back_walls": self.make_back_walls(),
+        }
+
+        filtered = {name: solid for name, solid in components.items() if solid is not None}
+
+        bridge: cq.Workplane | None = None
+        for solid in filtered.values():
+            bridge = solid if bridge is None else bridge.union(solid)
+
+        if bridge is None:
+            raise ValueError("No bridge components were generated; check configuration.")
+
+        if with_components:
+            return filtered, bridge
+        else:
+            return bridge
+
+        
+       

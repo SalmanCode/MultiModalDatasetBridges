@@ -8,6 +8,7 @@ from dataclasses import asdict
 from datetime import datetime
 import time
 import random
+import os
 
 from config import BridgeConfig
 from param_gen import generate_bridge_configs, configs_to_records
@@ -36,11 +37,11 @@ class BridgePipeline:
         # Track generated bridges
         self.bridge_metadata: List[BridgeConfig] = []
 
-    def generate_bridges(self, num_bridges: int, bridge_type: str, step: int, include_sidewalks: bool, seed: int | None = None, overhang_m: float = 1.0) -> List[BridgeConfig]:
+    def generate_bridges(self, num_bridges: int, bridge_type: str, include_components: bool = False, seed: int | None = None) -> List[BridgeConfig]:
         """Create bridge configs and keep them in-memory."""
 
         # First we generate the bridge configs from config.py
-        configs = generate_bridge_configs(count=num_bridges, bridge_type=bridge_type, step=step, include_sidewalks=include_sidewalks, seed=seed, overhang_m=overhang_m)
+        configs = generate_bridge_configs(count=num_bridges, bridge_type=bridge_type, seed=seed)
         self.bridge_metadata = configs
         logger.info("Generated %d bridge configs", len(configs))
 
@@ -50,7 +51,8 @@ class BridgePipeline:
         for config in configs:
             # Then we build the bridge model from geometry.bridge_model.py
             bridge_model = BridgeModel(config)
-            bridge = bridge_model.build_bridge() # this is building the bridge model from geometry.bridge_model.py
+
+            bridge = bridge_model.build_bridge(with_components=False) # this is building the bridge model from geometry.bridge_model.py
             stl_file = self.bridge_objects_dir / f"{config.bridge_id}.stl"
             cq.exporters.export(bridge, str(stl_file))
             mesh = o3d.io.read_triangle_mesh(str(stl_file))
@@ -60,9 +62,28 @@ class BridgePipeline:
                 # Clean up STL file
                 stl_file.unlink()
                 logger.info(f"Successfully saved bridge {config.bridge_id} to {obj_file}")
-            else:
-                logger.error(f"Failed to generate valid mesh for bridge {config.bridge_id}")
-                return
+            
+            if include_components:
+                components, bridge = bridge_model.build_bridge(with_components=True)
+                os.makedirs(self.bridge_objects_dir / f"{config.bridge_id}", exist_ok=True) #making a directory for the bridge id
+                stl_file = self.bridge_objects_dir / f"{config.bridge_id}.stl"
+
+                for name, component in components.items():
+                    stl_file = self.bridge_objects_dir / f"{config.bridge_id}" / f"{name}.stl"
+                    cq.exporters.export(component, str(stl_file))
+
+                    mesh = o3d.io.read_triangle_mesh(str(stl_file))
+                    obj_file = self.bridge_objects_dir / f"{config.bridge_id}" / f"{name}.obj"
+                    if len(mesh.vertices) > 0:
+                        o3d.io.write_triangle_mesh(str(obj_file), mesh)
+                        # Clean up STL file
+                        stl_file.unlink()
+                        logger.info(f"Successfully saved bridge {config.bridge_id} to {obj_file}")
+                    else:
+                        logger.error(f"Failed to generate valid mesh for bridge {config.bridge_id}")
+                        return
+            
+                
 
         return configs, config_json
 

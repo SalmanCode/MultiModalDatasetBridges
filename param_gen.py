@@ -51,9 +51,13 @@ def piers_combination(lanes: int, rng: random.Random, bridge_type: str) -> int:
     return num_of_piers_per_lane, radius_of_pier, type_of_pier, pier_cap_type, pier_cross_section
 
 
-def generate_bridge_configs(count: int, bridge_type: str, step: int, include_sidewalks: bool, seed: int | None = None, overhang_m: float = 1.0) -> List[BridgeConfig]:
+def generate_bridge_configs(count: int, bridge_type: str, seed: int | None = None) -> List[BridgeConfig]:
     rng = random.Random(seed)
     configs: List[BridgeConfig] = []
+    step = 5 # this is the step size for span increment. 
+    overhang_m = 1.0 # this is the overhang length for the bridge in meters.
+    include_sidewalks = True # this is the flag to include sidewalks in the bridge.
+
     for idx in range(1, count + 1):
         bridge_type_picked = bridge_type or rng.choice(list(BRIDGE_SPECS.keys()))
         lanes = rng.randint(2, 5)
@@ -67,14 +71,14 @@ def generate_bridge_configs(count: int, bridge_type: str, step: int, include_sid
             num_spans=num_spans,
             total_length_m=total_length,
             width_m=width, 
-            lanes=lanes, 
+            lanes=lanes,
+            include_sidewalks=include_sidewalks,
             depth_of_girder=depth_of_girder,
             number_of_piers_per_lane=number_of_piers_per_lane,
             radius_of_pier=radius_of_pier,
             pier_type=type_of_pier,
             pier_cap_type=pier_cap_type,
             pier_cross_section=pier_cross_section,
-            include_sidewalks=include_sidewalks
             ))
         
     return configs
