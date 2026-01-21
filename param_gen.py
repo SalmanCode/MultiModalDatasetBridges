@@ -26,6 +26,7 @@ def pick_span(bridge_type: str, rng: random.Random, step: int = 5, overhang_m: f
     depth_of_girder = raw_span * rng.uniform(*spec["depth_ratio"])
     num_spans = rng.randint(2, 5)
     total_length = raw_span * num_spans + 2 * overhang_m
+    total_length = total_length - total_length % step + step
 
     return round(raw_span, 1), num_spans, round(total_length, 1), round(depth_of_girder, 1)
 
