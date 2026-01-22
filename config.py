@@ -12,7 +12,9 @@ class BridgeConfig:
     lanes: int
     include_sidewalks: bool
     depth_of_girder: float
-    number_of_piers_per_lane: int
+    number_of_piers_along_length: int
+    number_of_piers_across_width: int
+    total_piers: int
     radius_of_pier: float
     pier_type: str
     pier_cap_type: str

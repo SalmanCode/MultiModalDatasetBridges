@@ -1,11 +1,12 @@
 from BridgePipeline import BridgePipeline
 import sys
 import logging
+import argparse
+
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-import argparse
-import json
 
 def main():
     parser = argparse.ArgumentParser(description="Generate synthetic bridge datasets")
@@ -20,8 +21,7 @@ def main():
     bridge_configs, config_json = pipeline.generate_bridges(args.num_bridges, args.bridge_type, args.include_components, seed=None)
         
 
-    with open("bridge_summary.json", "w") as f:
-        json.dump(config_json, f, indent=2)
+    
     
 
 

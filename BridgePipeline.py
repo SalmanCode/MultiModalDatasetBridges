@@ -9,7 +9,7 @@ from datetime import datetime
 import time
 import random
 import os
-
+import json
 from config import BridgeConfig
 from param_gen import generate_bridge_configs, configs_to_records
 from geometry.bridge_model import BridgeModel
@@ -46,7 +46,10 @@ class BridgePipeline:
         logger.info("Generated %d bridge configs", len(configs))
 
         # Then we convert the configs to records
+
         config_json = configs_to_records(configs)
+        with open(self.output_dir / "bridge_summary.json", "w") as f:
+            json.dump(config_json, f, indent=2)
 
         for config in configs:
             # Then we build the bridge model from geometry.bridge_model.py

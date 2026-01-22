@@ -38,7 +38,7 @@ def pick_deck_width(lanes: int, include_sidewalks: bool) -> float:
     paved_width = lanes * lane_width + 2 * (hard_shoulder + hard_strip)
     return round(paved_width + 2 * sidewalk, 2)
 
-def piers_combination(lanes: int, rng: random.Random, bridge_type: str) -> int:
+def piers_combination(lanes: int, rng: random.Random, bridge_type: str, width_m: float, depth_of_girder: float, num_spans: int) -> int:
     #num_of_piers_per_lane = rng.randint(1,2) # this is the number of piers per lane
     num_of_piers_per_lane = 1 # right now we just keep equal to 1 per lane
     radius_of_pier = 0.6 # this is the radius of the pier in meters from oregon state standards
@@ -49,7 +49,23 @@ def piers_combination(lanes: int, rng: random.Random, bridge_type: str) -> int:
     
     pier_cap_type = rng.choice(["prismatic"])
     pier_cross_section = rng.choice(["circular", "rectangular"])
-    return num_of_piers_per_lane, radius_of_pier, type_of_pier, pier_cap_type, pier_cross_section
+
+    num_of_piers_along_length = num_spans - 1
+
+    if type_of_pier == "hammer_head":
+        ratio = round(depth_of_girder / width_m, 2)
+        if ratio >= 0.16 and ratio <= 0.20:
+            print(f"Ratio: {ratio} for width: {width_m} and depth: {depth_of_girder}")
+            num_of_piers_across_width = 1
+        elif ratio < 0.16:
+            num_of_piers_across_width = 2
+            print(f"Ratio: {ratio} for width: {width_m} and depth: {depth_of_girder}")
+    elif type_of_pier == "multicolumn":
+        num_of_piers_across_width = num_of_piers_per_lane * lanes
+
+    
+
+    return num_of_piers_along_length, num_of_piers_across_width, radius_of_pier, type_of_pier, pier_cap_type, pier_cross_section
 
 
 def generate_bridge_configs(count: int, bridge_type: str, seed: int | None = None) -> List[BridgeConfig]:
@@ -64,7 +80,8 @@ def generate_bridge_configs(count: int, bridge_type: str, seed: int | None = Non
         lanes = rng.randint(2, 5)
         span, num_spans, total_length, depth_of_girder = pick_span(bridge_type_picked, rng, step, overhang_m)
         width = pick_deck_width(lanes, include_sidewalks)
-        number_of_piers_per_lane, radius_of_pier, type_of_pier, pier_cap_type, pier_cross_section = piers_combination(lanes, rng, bridge_type_picked)
+        number_of_piers_along_length, number_of_piers_across_width, radius_of_pier, type_of_pier, pier_cap_type, pier_cross_section = piers_combination(lanes, rng, bridge_type_picked, width, depth_of_girder, num_spans)
+        total_piers = number_of_piers_along_length * number_of_piers_across_width
         configs.append(BridgeConfig(
             bridge_id=f"bridge_{idx}", 
             bridge_type=bridge_type_picked, 
@@ -75,7 +92,9 @@ def generate_bridge_configs(count: int, bridge_type: str, seed: int | None = Non
             lanes=lanes,
             include_sidewalks=include_sidewalks,
             depth_of_girder=depth_of_girder,
-            number_of_piers_per_lane=number_of_piers_per_lane,
+            number_of_piers_along_length=number_of_piers_along_length,
+            number_of_piers_across_width=number_of_piers_across_width,
+            total_piers=total_piers,
             radius_of_pier=radius_of_pier,
             pier_type=type_of_pier,
             pier_cap_type=pier_cap_type,

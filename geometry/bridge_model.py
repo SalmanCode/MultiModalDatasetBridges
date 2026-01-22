@@ -35,12 +35,10 @@ class BridgeModel:
     def compute_box_girder_spacing(self) -> tuple[int, float]:
         
         ratio = self.config.depth_of_girder / self.config.width_m
-        print(f"Ratio: {ratio} for width: {self.config.width_m} and depth: {self.config.depth_of_girder}")
         if ratio >= 1/6 and ratio <= 1/5:
             num_of_cells = 1
         elif ratio < 1/6:
             num_of_cells = 2
-        print(f"Num of cells by ratio: {num_of_cells}")
         box_width = (self.config.width_m - 4) / num_of_cells # here 4 is assumed that the l1 that is the length left out on each side of the box should be between 2 to 4 meters
         return num_of_cells, box_width
 
@@ -207,7 +205,7 @@ class BridgeModel:
 
         return railing_poles.union(bars)
 
-    def compute_pier_positions(self) -> list[float]:
+    def compute_pier_positions_along_length(self) -> list[float]:
         
         num_of_spans= self.config.num_spans
         interior_span_length = round(self.config.total_length_m / (num_of_spans - 0.6), 1)
@@ -215,9 +213,6 @@ class BridgeModel:
 
         #create a list of spans
         spans = [end_span_length] + [interior_span_length] * (num_of_spans-2) + [end_span_length]
-
-      
-        
         pier_positions = []
         pos = 0.0
         for span in spans[:-1]:
@@ -235,28 +230,27 @@ class BridgeModel:
 
         bridge_clearance_height = getattr(self.config, "bridge_clearance_height", 5.0) # this is the minimum clearance height from the girder to the ground
          
-        
-
+    
         # num of piers in x direction is same for both types of piers
-        num_of_piers_x = self.config.num_spans - 1 # this is the number of piers in the x direction
-        
-        pier_positions_x = self.compute_pier_positions() # this is the list of positions of the piers in the x direction
+        num_of_piers_x = self.config.number_of_piers_along_length # this is the number of piers in the x direction
+        pier_positions_x = self.compute_pier_positions_along_length() 
 
         if self.config.pier_type == "multicolumn":
             
+            
+            
+            num_of_piers_y = self.config.number_of_piers_across_width
+            pier_spacing_y = self.config.width_m / num_of_piers_y
+            
+
+            # Multi column piers require a pier cap
             piers = cq.Workplane("XY")
             pier_caps = cq.Workplane("XY")
-
-
-            num_of_piers_per_lane = self.config.number_of_piers_per_lane
-            num_of_lanes = self.config.lanes
-            num_of_piers_y = num_of_piers_per_lane * num_of_lanes
-            
-            pier_spacing_y = self.config.width_m / num_of_piers_y
-            #logger.info(f"pier spacing y: {pier_spacing_y}")
-
             cap_height = 0.5     # Right now assuming that the cap height is 1 meter
             cap_thickness = self.config.radius_of_pier * 2
+
+
+            # Generating piers columns
             for i in range(num_of_piers_x):
                 pier_position_x = pier_positions_x[i]
                 for j in range(num_of_piers_y):
@@ -272,17 +266,21 @@ class BridgeModel:
         
 
         if self.config.pier_type == "hammer_head":
-            num_of_piers_y, box_width = self.compute_box_girder_spacing()
-            piers = cq.Workplane("YZ")
 
+
+            piers = cq.Workplane("YZ")
+            num_of_piers_y = self.config.number_of_piers_across_width
+            _, box_width = self.compute_box_girder_spacing()
             pier_spacing_y = self.config.width_m / num_of_piers_y # this is to calculate the spacing between the piers accross the width of the bridge. This will be the same as the spacing between the cells in the box girder.
 
-            polygon_height = 1 # this is taken from literature. Check notion repository for more details.
-            polygon_slant_height = 1 # this is taken from literature. Check notion repository for more details.
+            #Creating polygon geometry for hammer head piers
+            polygon_height = 1 # Literature based. Check notion repository for more details.
+            polygon_slant_height = 1 # Literature based. Check notion repository for more details.
             if self.config.pier_cross_section == "circular":
                 polygon_lower_width = 2*self.config.radius_of_pier
             elif self.config.pier_cross_section == "rectangular":
                 polygon_lower_width = 1.8 # this is in case of rectangular piers for hammerhead. from literature. Check notion repository for more details.
+            
             p1 = (box_width/2, 0)
             p2 = (p1[0], - polygon_height)
             p3 = (polygon_lower_width/2, -polygon_slant_height - polygon_height)
