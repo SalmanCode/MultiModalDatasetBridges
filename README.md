@@ -64,3 +64,10 @@ Each bridge is scanned from 8 positions:
 - **Legs 7-8**: Above the bridge
 
 This gives you complete coverage of the entire bridge structure.
+
+
+## Acknowledgements
+
+This work used Helios ++ for the simulation of TLS point clouds.
+Winiwarter, L., Esmorís Pena, A., Weiser, H., Anders, K., Martínez Sanchez, J., Searle, M., Höfle, B. (2022): Virtual laser scanning with HELIOS++: A novel take on ray tracing-based simulation of topographic full-waveform 3D laser scanning. Remote Sensing of Environment, 269, doi:10.1016/j.rse.2021.112772
+
