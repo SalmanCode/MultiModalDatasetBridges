@@ -117,6 +117,7 @@ Final Dataset (3D models + point clouds + labels)
 
 Each bridge is scanned from **8 strategically placed positions** for complete coverage:
 
+
 - **Legs 0-1**: Left and right sides of the bridge
 - **Legs 2-3**: Front and back ends along the length
 - **Legs 4-5**: Below the bridge (underside coverage)
@@ -203,7 +204,6 @@ If you use this dataset or methodology in your research, please cite:
 
 ## Contact
 
-<<<<<<< HEAD
 For questions or collaboration:
 - salman.ahmed@tum.de
 - florian.noichl@tum.de
@@ -211,8 +211,4 @@ For questions or collaboration:
 ## License
 
 MIT License - See LICENSE file for details
-=======
-salman.ahmed@tum.de
-florian.noichl@tum.de
-changes in remote
->>>>>>> 930f51479edd1b08f2253c59cc053d6daf606896
+
