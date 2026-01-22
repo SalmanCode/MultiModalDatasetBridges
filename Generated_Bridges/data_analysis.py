@@ -48,15 +48,29 @@ print("✓ Saved: 01_span_vs_girder_depth_scatter.png")
 plt.close()
 
 
-# ========== Graph 3: Total Length Distribution by Bridge Type ==========
-plt.figure(figsize=(10, 6))
-sns.boxplot(data=df, x='bridge_type', y='total_length_m', palette='Set2')
-plt.title('Bridge Length Distribution by Type', fontsize=14, fontweight='bold')
-plt.xlabel('Bridge Type', fontsize=12)
-plt.ylabel('Total Length (m)', fontsize=12)
-plt.tight_layout()
-plt.savefig(output_dir / '03_length_by_bridge_type.png', dpi=300, bbox_inches='tight')
-print("✓ Saved: 03_length_by_bridge_type.png")
+# ========== Graph 3: Span and Total Length Distribution by Bridge Type (Horizontal) ==========
+plt.figure(figsize=(12, 7))
+# Prepare data for horizontal barplot using boxplots for both metrics
+metrics = ['span_m', 'total_length_m']
+names = ['Span Length (m)', 'Total Length (m)']
+
+for i, (metric, ylabel) in enumerate(zip(metrics, names)):
+    plt.subplot(1, 2, i+1)
+    sns.boxplot(
+        data=df,
+        y='bridge_type',
+        x=metric,
+        palette='Set2',
+        orient='h'  # horizontal
+    )
+    plt.ylabel('Bridge Type', fontsize=12)
+    plt.xlabel(ylabel, fontsize=12)
+    plt.title(f'{ylabel} by Bridge Type', fontsize=13, fontweight='bold')
+
+plt.suptitle('Span and Total Length Distribution by Bridge Type', fontsize=15, fontweight='bold')
+plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+plt.savefig(output_dir / '03_span_and_length_by_bridge_type_horizontal.png', dpi=300, bbox_inches='tight')
+print("✓ Saved: 03_span_and_length_by_bridge_type_horizontal.png")
 plt.close()
 
 

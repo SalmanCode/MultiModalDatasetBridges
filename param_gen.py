@@ -54,17 +54,14 @@ def piers_combination(lanes: int, rng: random.Random, bridge_type: str, width_m:
 
     if type_of_pier == "hammer_head":
         ratio = round(depth_of_girder / width_m, 2)
-        if ratio >= 0.16 and ratio <= 0.20:
-            print(f"Ratio: {ratio} for width: {width_m} and depth: {depth_of_girder}")
+        if ratio >= 0.16 and ratio <= 0.20: # Literature based. Check notion repository for more details.
             num_of_piers_across_width = 1
-        elif ratio < 0.16:
+        elif ratio < 0.16: # Literature based. Check notion repository for more details.
             num_of_piers_across_width = 2
-            print(f"Ratio: {ratio} for width: {width_m} and depth: {depth_of_girder}")
     elif type_of_pier == "multicolumn":
         num_of_piers_across_width = num_of_piers_per_lane * lanes
 
     
-
     return num_of_piers_along_length, num_of_piers_across_width, radius_of_pier, type_of_pier, pier_cap_type, pier_cross_section
 
 

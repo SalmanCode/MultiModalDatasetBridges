@@ -3,7 +3,7 @@ from collections import defaultdict
 import sys
 
 
-def semantic_segmentation(input_dir):
+def semantic_segmentation(input_dir, bridge_id):
     """
     Split a .xyz file into separate files based on the 9th column value.
     
@@ -14,11 +14,11 @@ def semantic_segmentation(input_dir):
     # Component mapping
     component_names = {
         0: "approach_slab",
-        1: "deck",
-        2: "railings",
+        1: "back_wall",
+        2: "deck",
         3: "piers",
-        4: "wing_walls",
-        5: "back_walls"
+        4: "railings",
+        5: "wing_walls"
     }
     
 
@@ -38,13 +38,18 @@ def semantic_segmentation(input_dir):
         print(f"No .xyz files found in {input_dir}")
         return
 
+    all_lines = []  # To hold all scan points
+
     for input_file in xyz_files:
         with open(input_file, 'r') as f:
             for line_num, line in enumerate(f, 1):
                 line = line.strip()
                 if not line:  # Skip empty lines
                     continue
-                
+
+                # Collect line for the merged output
+                all_lines.append(line)
+
                 # Split the line by whitespace
                 parts = line.split()
                 
@@ -52,6 +57,12 @@ def semantic_segmentation(input_dir):
                 component_id = int(parts[8])
                 component_files[component_id].append(line)
     
+    # Write merged .xyz file containing all scans
+    merged_output_file = os.path.join(input_dir, f"{bridge_id}_complete.xyz")
+    with open(merged_output_file, 'w') as f_merged:
+        f_merged.write('\n'.join(all_lines) + '\n')
+    print(f"\nMerged all scans into {os.path.basename(merged_output_file)} ({len(all_lines)} points)")
+
     # Write separate files for each component
     print(f"\nWriting component files...")
     for component_id, lines in sorted(component_files.items()):
