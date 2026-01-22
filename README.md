@@ -117,6 +117,7 @@ Final Dataset (3D models + point clouds + labels)
 
 Each bridge is scanned from **8 strategically placed positions** for complete coverage:
 
+<<<<<<< HEAD
 - **Legs 0-1**: Left and right sides of the bridge
 - **Legs 2-3**: Front and back ends along the length
 - **Legs 4-5**: Below the bridge (underside coverage)
@@ -204,3 +205,13 @@ If you use this dataset or methodology in your research, please cite:
 ---
 
 **For questions or collaboration**: [Your contact information]
+=======
+This gives you complete coverage of the entire bridge structure.
+
+
+## Acknowledgements
+
+This work used Helios ++ for the simulation of TLS point clouds.
+Winiwarter, L., Esmorís Pena, A., Weiser, H., Anders, K., Martínez Sanchez, J., Searle, M., Höfle, B. (2022): Virtual laser scanning with HELIOS++: A novel take on ray tracing-based simulation of topographic full-waveform 3D laser scanning. Remote Sensing of Environment, 269, doi:10.1016/j.rse.2021.112772
+
+>>>>>>> 06e414cbd0584f530e6cbcf6e2c53b80498b02b1
