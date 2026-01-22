@@ -117,7 +117,6 @@ Final Dataset (3D models + point clouds + labels)
 
 Each bridge is scanned from **8 strategically placed positions** for complete coverage:
 
-<<<<<<< HEAD
 - **Legs 0-1**: Left and right sides of the bridge
 - **Legs 2-3**: Front and back ends along the length
 - **Legs 4-5**: Below the bridge (underside coverage)
@@ -190,13 +189,24 @@ This work builds upon excellent open-source projects:
 
 Special thanks to the developers and maintainers of these tools for making high-quality geometric modeling and laser scanning simulation accessible to the research community.
 
+This work used HELIOS++ for the simulation of TLS point clouds:
 
-## Acknowledgements
+**Winiwarter, L., Esmorís Pena, A., Weiser, H., Anders, K., Martínez Sanchez, J., Searle, M., Höfle, B. (2022)**: Virtual laser scanning with HELIOS++: A novel take on ray tracing-based simulation of topographic full-waveform 3D laser scanning. *Remote Sensing of Environment*, 269. [doi:10.1016/j.rse.2021.112772](https://doi.org/10.1016/j.rse.2021.112772)
 
-This work used Helios ++ for the simulation of TLS point clouds.
-Winiwarter, L., Esmorís Pena, A., Weiser, H., Anders, K., Martínez Sanchez, J., Searle, M., Höfle, B. (2022): Virtual laser scanning with HELIOS++: A novel take on ray tracing-based simulation of topographic full-waveform 3D laser scanning. Remote Sensing of Environment, 269, doi:10.1016/j.rse.2021.112772
+## Citation
+
+If you use this dataset or methodology in your research, please cite:
+
+```
+[Citation will be added after I3CE Conference 2026 publication]
+```
 
 ## Contact
 
-salman.ahmed@tum.de
-florian.noichl@tum.de
+For questions or collaboration:
+- salman.ahmed@tum.de
+- florian.noichl@tum.de
+
+## License
+
+MIT License - See LICENSE file for details
