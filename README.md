@@ -196,3 +196,6 @@ Special thanks to the developers and maintainers of these tools for making high-
 This work used Helios ++ for the simulation of TLS point clouds.
 Winiwarter, L., Esmorís Pena, A., Weiser, H., Anders, K., Martínez Sanchez, J., Searle, M., Höfle, B. (2022): Virtual laser scanning with HELIOS++: A novel take on ray tracing-based simulation of topographic full-waveform 3D laser scanning. Remote Sensing of Environment, 269, doi:10.1016/j.rse.2021.112772
 
+## Contact
+
+salman.ahmed@tum.de
