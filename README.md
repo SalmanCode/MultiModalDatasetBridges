@@ -161,7 +161,7 @@ python main.py 5 --include_components          # 5 bridges with separate compone
 python helios/main.py [--num-bridges N] [--run-simulation] [--semantic-segmentation]
 
 # Examples:
-python main.py --num-bridges 5                                    # Generate survey files only
+python main.py --num-bridges 5                                   # Generate survey files only
 python main.py --num-bridges 3 --run-simulation                  # Generate + simulate
 python main.py --run-simulation --semantic-segmentation          # Full pipeline, all bridges
 ```
@@ -190,28 +190,9 @@ This work builds upon excellent open-source projects:
 
 Special thanks to the developers and maintainers of these tools for making high-quality geometric modeling and laser scanning simulation accessible to the research community.
 
-## Citation
-
-If you use this dataset or methodology in your research, please cite:
-
-```
-[Citation will be added after I3CE Conference 2026 publication]
-```
-
-## License
-
-[Your license here - check LICENSE file]
-
----
-
-**For questions or collaboration**: [Your contact information]
-=======
-This gives you complete coverage of the entire bridge structure.
-
 
 ## Acknowledgements
 
 This work used Helios ++ for the simulation of TLS point clouds.
 Winiwarter, L., Esmorís Pena, A., Weiser, H., Anders, K., Martínez Sanchez, J., Searle, M., Höfle, B. (2022): Virtual laser scanning with HELIOS++: A novel take on ray tracing-based simulation of topographic full-waveform 3D laser scanning. Remote Sensing of Environment, 269, doi:10.1016/j.rse.2021.112772
 
->>>>>>> 06e414cbd0584f530e6cbcf6e2c53b80498b02b1
