@@ -22,18 +22,35 @@ You end up with:
 
 ## Quick Start
 
-### Step 1: Generate Bridge Models
+### Complete Pipeline (Recommended)
+
+Run everything with one command:
+
+```bash
+# Full pipeline: Generate models → Simulate scanning → Segment → Convert to NPY
+python run_full_pipeline.py --num-bridges 5 --include-components --run-simulation --semantic-segmentation
+```
+
+This automatically:
+1. Generates 3D bridge models with components
+2. Simulates laser scanning with HELIOS++
+3. Performs semantic segmentation
+4. Converts to ML-ready NPY format
+
+### Step-by-Step (Manual)
+
+#### Step 1: Generate Bridge Models
 
 ```bash
 # Generate 10 bridges with all components
-python main.py 10 --include_components
+python BridgeModelGeneration/bridgemodel_generator.py 10 --include_components
 ```
 
 This creates:
-- 3D models in `Generated_Bridges/BridgeObjects/`
-- Bridge parameters in `Generated_Bridges/bridge_summary.json`
+- 3D models in `Dataset/BridgeModels/`
+- Bridge parameters in `Dataset/bridge_summary.json`
 
-### Step 2: Simulate Laser Scanning
+#### Step 2: Simulate Laser Scanning
 
 ```bash
 cd helios
@@ -45,15 +62,21 @@ This creates:
 - Simulated point clouds from 8 scanner positions
 - Segmented point clouds by component type
 
+#### Step 3: Convert to NPY
+
+```bash
+cd pointclouds
+python xyztonpy.py
+```
+
+This creates:
+- ML-ready NPY files in `pointclouds/PointCloudsNPY/`
+
 ### Test with Few Bridges First
 
 ```bash
-# Generate just 2 bridges for testing
-python main.py 2 --include_components
-
-# Simulate scanning for those 2 bridges
-cd helios
-python main.py --num-bridges 2 --run-simulation --semantic-segmentation
+# Quick test with 2 bridges
+python run_full_pipeline.py --num-bridges 2 --include-components --run-simulation
 ```
 
 ## Full Pipeline Overview
@@ -80,38 +103,47 @@ Final Dataset (3D models + point clouds + labels)
 
 ## Where to Find Everything
 
-### Bridge Models
-- **3D Components**: `Generated_Bridges/BridgeObjects/bridge_X/`
-  - `approach_slabs.obj` - Bridge approach slabs
-  - `back_walls.obj` - Back abutment walls
-  - `deck.obj` - Bridge deck
-  - `piers.obj` - Support piers
-  - `railings.obj` - Safety railings
-  - `wing_walls.obj` - Wing walls at abutments
+All outputs are organized in the `Dataset/` folder:
 
-- **Full Models**: `Generated_Bridges/BridgeObjects/bridge_X.obj`
-- **Metadata**: `Generated_Bridges/bridge_summary.json` - All bridge parameters
+### Dataset Structure
+```
+Dataset/
+├─ BridgeModels/
+│  └─ bridge_X/          # 3D models for each bridge
+│     ├─ approach_slabs.obj
+│     ├─ back_walls.obj
+│     ├─ deck.obj
+│     ├─ piers.obj
+│     ├─ railings.obj
+│     └─ wing_walls.obj
+│
+├─ PointCloudScans/
+│  ├─ raw/               # Raw laser scan data
+│  │  └─ bridge_X/
+│  │     ├─ leg000_points.xyz → leg007_points.xyz
+│  │     └─ bridge_X_complete.xyz
+│  │
+│  ├─ segmented/         # Semantically segmented scans
+│  │  └─ bridge_X/
+│  │     ├─ approach_slab.xyz
+│  │     ├─ back_wall.xyz
+│  │     ├─ deck.xyz
+│  │     ├─ piers.xyz
+│  │     ├─ railings.xyz
+│  │     └─ wing_walls.xyz
+│  │
+│  ├─ npy/               # ML-ready format
+│  │  └─ bridge_X.npy (8192 points × 5 features)
+│  │
+│  └─ scanner_positions.json  # Scanner coordinates for each bridge
+│
+└─ bridge_summary.json   # All bridge parameters and metadata
+```
 
-### Point Clouds
-- **Raw Scans**: `helios/output/TLS_bridge_X/[timestamp]/`
-  - `leg000_points.xyz` through `leg007_points.xyz` - Individual scanner positions
-  - `leg000_trajectory.txt` through `leg007_trajectory.txt` - Scanner trajectories
-
-- **Segmented Components**: Same directory after segmentation
-  - `approach_slab.xyz` - Points belonging to approach slabs
-  - `back_wall.xyz` - Points from back walls
-  - `deck.xyz` - Deck points
-  - `piers.xyz` - Pier points
-  - `railings.xyz` - Railing points
-  - `wing_walls.xyz` - Wing wall points
-
-### Scanner Configuration
-- **Survey Files**: `helios/data/surveys/TLS_bridge_X_survey.xml`
-- **Scene Files**: `helios/data/scenes/TLS_bridge_X_scene.xml`
-- **Scanner Positions**: `helios/scanner_positions.json` - Coordinates of all 8 scanner positions per bridge
-
-### Visualizations
-- **Analysis Plots**: `Generated_Bridges/analysis_plots/` - Statistical analysis of bridge parameters
+### Additional Files
+- **Survey Files**: `helios/data/surveys/TLS_bridge_X_survey.xml` - HELIOS++ survey configurations
+- **Scene Files**: `helios/data/scenes/TLS_bridge_X_scene.xml` - HELIOS++ scene definitions
+- **Analysis Plots**: `Generated_Bridges/analysis_plots/` - Statistical visualizations
 
 ## Scanner Setup
 
@@ -146,24 +178,40 @@ Both types include realistic variations in:
 
 ## Command Options
 
-### Bridge Generation
+### Master Pipeline (All-in-One)
 ```bash
-python main.py <num_bridges> [--bridge_type TYPE] [--include_components]
+python run_full_pipeline.py --num-bridges N [OPTIONS]
 
 # Examples:
-python main.py 20                              # 20 bridges, mixed types
-python main.py 10 --bridge_type box_girder    # 10 box girder bridges only
-python main.py 5 --include_components          # 5 bridges with separate components
+python run_full_pipeline.py --num-bridges 10 --include-components --run-simulation --semantic-segmentation
+python run_full_pipeline.py --num-bridges 5 --bridge-type box_girder --run-simulation
+python run_full_pipeline.py --num-bridges 3 --skip-simulation  # Models only
+
+Options:
+  --num-bridges N              Number of bridges to generate (required)
+  --bridge-type TYPE           box_girder or beam_slab (default: mixed)
+  --include-components         Generate separate component OBJ files
+  --run-simulation             Run HELIOS++ laser scanning
+  --semantic-segmentation      Segment point clouds by component
+  --skip-simulation            Generate models only, no scanning
+  --skip-npy-conversion        Skip NPY conversion step
 ```
 
-### Point Cloud Simulation
-```bash
-python helios/main.py [--num-bridges N] [--run-simulation] [--semantic-segmentation]
+### Individual Steps
 
-# Examples:
-python main.py --num-bridges 5                                   # Generate survey files only
-python main.py --num-bridges 3 --run-simulation                  # Generate + simulate
-python main.py --run-simulation --semantic-segmentation          # Full pipeline, all bridges
+#### Bridge Generation
+```bash
+python BridgeModelGeneration/bridgemodel_generator.py <num_bridges> [--bridge_type TYPE] [--include_components]
+```
+
+#### Point Cloud Simulation
+```bash
+python helios/main.py --num-bridges N [--run-simulation] [--semantic-segmentation]
+```
+
+#### NPY Conversion
+```bash
+python pointclouds/xyztonpy.py
 ```
 
 ## Research Context
@@ -188,19 +236,8 @@ This work builds upon excellent open-source projects:
 - **[CadQuery](https://github.com/CadQuery/cadquery)** - Parametric 3D CAD modeling in Python
 - **[HELIOS++](https://github.com/3dgeo-heidelberg/helios)** - LiDAR simulation framework developed by 3DGeo Research Group, Heidelberg University
 
-Special thanks to the developers and maintainers of these tools for making high-quality geometric modeling and laser scanning simulation accessible to the research community.
 
-This work used HELIOS++ for the simulation of TLS point clouds:
 
-**Winiwarter, L., Esmorís Pena, A., Weiser, H., Anders, K., Martínez Sanchez, J., Searle, M., Höfle, B. (2022)**: Virtual laser scanning with HELIOS++: A novel take on ray tracing-based simulation of topographic full-waveform 3D laser scanning. *Remote Sensing of Environment*, 269. [doi:10.1016/j.rse.2021.112772](https://doi.org/10.1016/j.rse.2021.112772)
-
-## Citation
-
-If you use this dataset or methodology in your research, please cite:
-
-```
-[Citation will be added after I3CE Conference 2026 publication]
-```
 
 ## Contact
 
