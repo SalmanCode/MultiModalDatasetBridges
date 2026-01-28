@@ -12,7 +12,7 @@ def create_survey_xml(bridge, positions, output_path):
 <document>
 	<!-- Default scanner settings: -->
     <scannerSettings id="profile1" active="true" pulseFreq_hz="100000" scanFreq_hz="120" scanAngle_deg="100" headRotatePerSec_deg="10.0"/>
-    <survey name="TLS_{bridge_id}" scene="./data/scenes/TLS_{bridge_id}_scene.xml#TLS_{bridge_id}" platform="data/platforms.xml#tripod" scanner="data/scanners_tls.xml#riegl_vz400">
+    <survey name="TLS_{bridge_id}" scene="PointCloudSimulation/data/scenes/TLS_{bridge_id}_scene.xml#TLS_{bridge_id}" platform="data/platforms.xml#tripod" scanner="data/scanners_tls.xml#riegl_vz400">
         <FWFSettings binSize_ns="0.2" beamSampleQuality="3" />
         <leg>
             <platformSettings x="{positions['leg1']['x']}" y="{positions['leg1']['y']}" z="{positions['leg1']['z']}" onGround="false" />

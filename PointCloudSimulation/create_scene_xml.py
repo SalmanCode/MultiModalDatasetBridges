@@ -26,11 +26,12 @@ def create_scene_xml(bridge, output_path):
     xml_parts.append(f'    <scene id="TLS_{bridge_id}" name="TLS_{bridge_id}">')
     xml_parts.append('')
     
-    # Add each component as a separate part
+    # Add each component as a separate part (use absolute path so helios finds files on Linux)
     for idx, obj_file in enumerate(obj_files):
+        obj_path = (bridge_folder / obj_file).resolve()
         xml_parts.append(f'        <part id="{idx}">')
         xml_parts.append('            <filter type="objloader">')
-        xml_parts.append(f'                <param type="string" key="filepath" value="../../Dataset/BridgeModels/{bridge_id}/{obj_file}" />')
+        xml_parts.append(f'                <param type="string" key="filepath" value="{obj_path}" />')
         xml_parts.append('                <param type="string" key="up" value="z" />')
         xml_parts.append('            </filter>')
         xml_parts.append('        </part>')

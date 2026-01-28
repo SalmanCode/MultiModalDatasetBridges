@@ -105,7 +105,7 @@ def verify_output():
     # Check NPY files
     npy_folder = dataset_dir / "PointCloudScans" / "npy"
     if npy_folder.exists():
-        npy_files = list(npy_folder.glob("TLS_*.npy"))
+        npy_files = list(npy_folder.glob("*.npy"))
         print(f"NPY point clouds: {len(npy_files)} files found")
     else:
         print(f"NPY folder not found")
@@ -134,12 +134,9 @@ def main():
         description='Complete pipeline for synthetic bridge dataset generation',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-    # Full pipeline with 5 bridges
-    python run_full_pipeline.py --num-bridges 5
-
+Example
     # Complete pipeline with components, simulation, and segmentation and npy conversion 
-    python run_full_pipeline.py --num-bridges 10 --include-components --run-simulation --semantic-segmentation --npy-conversion
+    python main.py --num-bridges 10 --include-components --run-simulation --semantic-segmentation --npy-conversion
 
     """
     )
