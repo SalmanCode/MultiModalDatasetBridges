@@ -134,7 +134,10 @@ def main():
         description='Complete pipeline for synthetic bridge dataset generation',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Example
+Examples:
+    # Full pipeline with 5 bridges
+    python main.py--num-bridges 5
+
     # Complete pipeline with components, simulation, and segmentation and npy conversion 
     python main.py --num-bridges 10 --include-components --run-simulation --semantic-segmentation --npy-conversion
 

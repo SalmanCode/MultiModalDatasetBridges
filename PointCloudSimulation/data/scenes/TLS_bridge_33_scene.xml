@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document>
+    <scene id="TLS_bridge_33" name="TLS_bridge_33">
+
+        <part id="0">
+            <filter type="objloader">
+                <param type="string" key="filepath" value="/Dataset/BridgeModels/bridge_33/approach_slabs.obj" />
+                <param type="string" key="up" value="z" />
+            </filter>
+        </part>
+        <part id="1">
+            <filter type="objloader">
+                <param type="string" key="filepath" value="/Dataset/BridgeModels/bridge_33/back_walls.obj" />
+                <param type="string" key="up" value="z" />
+            </filter>
+        </part>
+        <part id="2">
+            <filter type="objloader">
+                <param type="string" key="filepath" value="/Dataset/BridgeModels/bridge_33/deck.obj" />
+                <param type="string" key="up" value="z" />
+            </filter>
+        </part>
+        <part id="3">
+            <filter type="objloader">
+                <param type="string" key="filepath" value="/Dataset/BridgeModels/bridge_33/piers.obj" />
+                <param type="string" key="up" value="z" />
+            </filter>
+        </part>
+        <part id="4">
+            <filter type="objloader">
+                <param type="string" key="filepath" value="/Dataset/BridgeModels/bridge_33/railings.obj" />
+                <param type="string" key="up" value="z" />
+            </filter>
+        </part>
+        <part id="5">
+            <filter type="objloader">
+                <param type="string" key="filepath" value="/Dataset/BridgeModels/bridge_33/wing_walls.obj" />
+                <param type="string" key="up" value="z" />
+            </filter>
+        </part>
+		
+    </scene>
+</document>

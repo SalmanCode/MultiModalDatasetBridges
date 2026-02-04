@@ -170,7 +170,10 @@ def pointcloud_complete_pipeline(run_simulation=False, num_bridges=None, run_seg
                 else:
                     print(f"No semantic segmentation requested")
 
-                # Convert to NPY format if requested
+            
+
+               
+            # Convert to NPY format if requested
                 if convert_to_npy:
                     print(f"\n{'='*70}")
                     print(f"Converting point clouds to NPY format...")
@@ -178,14 +181,13 @@ def pointcloud_complete_pipeline(run_simulation=False, num_bridges=None, run_seg
 
                     npy_output_dir = scan_output_dir / "npy"
                     os.makedirs(npy_output_dir, exist_ok=True)
-                    convert_bridge_data(merged_output_file, npy_output_dir)
-
+                    convert_bridge_data(merged_output_file, npy_output_dir, add_color_padding=True)
+                    
             else:
     
                 print(f"Warning: Output directory not found: {scan_legs_bridge_dir}")
-                
-        
-        print(f"Completed {bridge_id}\n")
+            
+            print(f"Completed {bridge_id}\n")
 
     
     # Export scanner information to JSON
@@ -198,7 +200,6 @@ def pointcloud_complete_pipeline(run_simulation=False, num_bridges=None, run_seg
     
     
     
-
 
 
     
