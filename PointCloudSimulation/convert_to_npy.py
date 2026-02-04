@@ -1,4 +1,6 @@
 import os
+import re
+import argparse
 import numpy as np
 from pathlib import Path
 import time
@@ -43,8 +45,13 @@ def pc_norm(pc):
     return pc
 
 
-def convert_bridge_data(input_file, output_dir):
-    """Convert bridge point cloud data from HELIOS output to .npy format"""
+def convert_bridge_data(input_file, output_dir, add_color_padding=False):
+    """Convert bridge point cloud data from HELIOS output to .npy format.
+    If add_color_padding is True, output is 6 channels with last 3 as 0,0,0 (shape Nx6).
+    """
+    input_file = Path(input_file)
+    output_dir = Path(output_dir)
+    
     
 
     
@@ -73,6 +80,13 @@ def convert_bridge_data(input_file, output_dir):
     else:
         print(f"Warning: Unsupported format with {data.shape[1]} columns")
         return
+
+    # Optionally force 6 channels with last 3 as 0,0,0
+    if add_color_padding:
+        xyz = point_cloud[:, :3]
+        padding = np.zeros((point_cloud.shape[0], 3), dtype=point_cloud.dtype)
+        point_cloud = np.concatenate([xyz, padding], axis=1)
+        print(f"Added color padding: output shape {point_cloud.shape} (last 3 channels 0,0,0)")
     
     # Ensure we have the right number of points (8192 is standard for PointLLM)
     if len(point_cloud) > 8192:
@@ -93,15 +107,24 @@ def convert_bridge_data(input_file, output_dir):
     
     point_cloud = pc_norm(point_cloud)
     
-    # Save as .npy file
-    output_file = os.path.join(output_dir, f"{input_file.stem}.npy")
+    # Save as .npy file: bridge_<id>_8192.npy
+    match = re.search(r"bridge_(\d+)", input_file.stem, re.IGNORECASE)
+    output_name = f"bridge_{match.group(1)}_8192.npy" if match else f"{input_file.stem}_8192.npy"
+    output_file = os.path.join(output_dir, output_name)
     np.save(output_file, point_cloud.astype(np.float32))
     
-    print(f"Saved {input_file.stem} with shape {point_cloud.shape}")
+    print(f"Saved {output_name} with shape {point_cloud.shape}")
         
     print(f"Conversion complete. Files saved to {output_dir}")
 
 if __name__ == "__main__":
-    input_file = "H:/Datasets/syntehtic_data/cad_query/helios/bridge_5/TLS_5_complete.xyz"
-    output_dir = "H:/Datasets/syntehtic_data/cad_query/helios/bridge_5/npy"
-    convert_bridge_data(input_file, output_dir)
+    parser = argparse.ArgumentParser(description="Convert point cloud to .npy (e.g. 8192 x C).")
+    parser.add_argument("--input", "-i", help="Input .xyz file (or path)")
+    parser.add_argument("--output", "-o", help="Output directory for .npy files")
+    parser.add_argument("--add-color-padding", action="store_true",
+                        help="Force 6 channels with last 3 as 0,0,0 (output shape Nx6)")
+    args = parser.parse_args()
+
+    input_file = args.input or "H:/Datasets/syntehtic_data/cad_query/helios/bridge_5/TLS_5_complete.xyz"
+    output_dir = args.output or "H:/Datasets/syntehtic_data/cad_query/helios/bridge_5/npy"
+    convert_bridge_data(input_file, output_dir, add_color_padding=args.add_color_padding) 

@@ -1,0 +1,33 @@
+# Dataset outputs (large - generate locally)
+Dataset/PointCloudScans/
+Dataset/BridgeModels/
+
+# Simulation outputs
+PointCloudSimulation/output/
+PointCloudSimulation/data/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+.DS_Store
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Optional: uncomment to ignore all of Dataset (including bridge_summary, descriptions)
+# Dataset/
