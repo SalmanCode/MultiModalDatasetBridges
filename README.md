@@ -22,7 +22,6 @@ You end up with:
 
 ## Quick Start
 
-<<<<<<< HEAD
 ### Complete Pipeline (Recommended)
 
 Run everything with one command:
@@ -52,28 +51,12 @@ This creates:
 - Bridge parameters in `Dataset/bridge_summary.json`
 
 #### Step 2: Simulate Laser Scanning
-=======
-Create a conda environment and install the required libraries:
-
-```bash
-conda create -n cadq python=3.12.2
-conda activate cadq
-
-pip install open3d cadquery
-conda install -c conda-forge helios
-```
-
-### Complete Pipeline (Recommended)
-
-Run everything with one command:
->>>>>>> 96fa2ebd81e6ae9b7ca95022132b9ec11ee28c1b
 
 ```bash
 # Full pipeline: Generate models → Simulate scanning → Segment → Convert to NPY
 python main.py --num-bridges 1000 --include-components --run-simulation --semantic-segmentation --convert-npy
 ```
 
-<<<<<<< HEAD
 This creates:
 - Survey and scene files for HELIOS++
 - Simulated point clouds from 8 scanner positions
@@ -117,12 +100,10 @@ Semantic Segmentation (label each point by component)
     ↓
 Final Dataset (3D models + point clouds + labels)
 ```
-=======
->>>>>>> 96fa2ebd81e6ae9b7ca95022132b9ec11ee28c1b
 
 ## Where to Find Everything
 
-All outputs are organized in the `Dataset/` folder:
+You can find the dataset at  https://huggingface.co/datasets/SyedSalmanAhmed/MultiModalBridgeDataset
 
 ### Dataset Structure
 ```
@@ -137,11 +118,7 @@ Dataset/
 │     └─ wing_walls.obj
 │
 ├─ PointCloudScans/
-<<<<<<< HEAD
 │  ├─ raw/               # Raw laser scan data
-=======
-│  ├─ scans/               # Raw laser scan data
->>>>>>> 96fa2ebd81e6ae9b7ca95022132b9ec11ee28c1b
 │  │  └─ bridge_X/
 │  │     ├─ leg000_points.xyz → leg007_points.xyz
 │  │     └─ bridge_X_complete.xyz
@@ -166,11 +143,7 @@ Dataset/
 ### Additional Files
 - **Survey Files**: `helios/data/surveys/TLS_bridge_X_survey.xml` - HELIOS++ survey configurations
 - **Scene Files**: `helios/data/scenes/TLS_bridge_X_scene.xml` - HELIOS++ scene definitions
-<<<<<<< HEAD
 - **Analysis Plots**: `Generated_Bridges/analysis_plots/` - Statistical visualizations
-=======
-
->>>>>>> 96fa2ebd81e6ae9b7ca95022132b9ec11ee28c1b
 
 ## Scanner Setup
 
@@ -203,7 +176,6 @@ Both types include realistic variations in:
 - Pier configurations (single-column, multi-column, hammer-head)
 - Pier cross-sections (circular, rectangular)
 
-<<<<<<< HEAD
 ## Command Options
 
 ### Master Pipeline (All-in-One)
@@ -256,8 +228,6 @@ Perfect for research in:
 - Bridge component detection and classification
 - Structural health monitoring
 - AI/ML model training and validation
-=======
->>>>>>> 96fa2ebd81e6ae9b7ca95022132b9ec11ee28c1b
 
 ## Acknowledgments
 
@@ -277,5 +247,5 @@ For questions or collaboration:
 
 ## License
 
-MIT License - See LICENSE file for details
+MIT License
 
