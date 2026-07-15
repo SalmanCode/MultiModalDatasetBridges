@@ -214,20 +214,6 @@ python helios/main.py --num-bridges N [--run-simulation] [--semantic-segmentatio
 python pointclouds/xyztonpy.py
 ```
 
-## Research Context
-
-This dataset addresses the need for ground-truth data in bridge inspection and monitoring using point cloud analysis. The synthetic approach allows:
-
-- **Controlled experiments** with known ground truth
-- **Large-scale dataset generation** for deep learning
-- **Variation testing** across different bridge configurations
-- **Sensor position optimization** for real-world deployment
-
-Perfect for research in:
-- Point cloud semantic segmentation
-- Bridge component detection and classification
-- Structural health monitoring
-- AI/ML model training and validation
 
 ## Acknowledgments
 
