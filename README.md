@@ -37,7 +37,6 @@ This automatically:
 3. Performs semantic segmentation
 4. Converts to ML-ready NPY format
 
-```
 
 ## Full Pipeline Overview
 
