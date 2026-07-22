@@ -1,6 +1,9 @@
 import random
 from typing import List
-from .model_config import BridgeConfig
+try:
+    from .model_config import BridgeConfig
+except ImportError:
+    from model_config import BridgeConfig
 from dataclasses import asdict
 import pandas as pd
 
@@ -24,7 +27,7 @@ def pick_span(bridge_type: str, rng: random.Random, step: int = 5, overhang_m: f
     spec = BRIDGE_SPECS[bridge_type]
     raw_span = rng.uniform(*spec["span"])
     depth_of_girder = raw_span * rng.uniform(*spec["depth_ratio"])
-    num_spans = rng.randint(2, 5)
+    num_spans = rng.randint(1, 5)
     total_length = raw_span * num_spans + 2 * overhang_m
     total_length = total_length - total_length % step + step
 
@@ -39,7 +42,7 @@ def pick_deck_width(lanes: int, include_sidewalks: bool) -> float:
     return round(paved_width + 2 * sidewalk, 2)
 
 def piers_combination(lanes: int, rng: random.Random, bridge_type: str, width_m: float, depth_of_girder: float, num_spans: int) -> int:
-    #num_of_piers_per_lane = rng.randint(1,2) # this is the number of piers per lane
+    
     num_of_piers_per_lane = 1 # right now we just keep equal to 1 per lane
     radius_of_pier = 0.6 # this is the radius of the pier in meters from oregon state standards
     if bridge_type == "box_girder":
@@ -51,16 +54,23 @@ def piers_combination(lanes: int, rng: random.Random, bridge_type: str, width_m:
     pier_cross_section = rng.choice(["circular", "rectangular"])
 
     num_of_piers_along_length = num_spans - 1
+    if num_of_piers_along_length == 0:
+        num_of_piers_across_width = 0
+        pier_cross_section = None
+        pier_cap_type = None
+        type_of_pier = None
 
-    if type_of_pier == "hammer_head":
-        ratio = round(depth_of_girder / width_m, 2)
-        if ratio >= 0.16 and ratio <= 0.20: # Literature based. Check notion repository for more details.
-            num_of_piers_across_width = 1
-        elif ratio < 0.16: # Literature based. Check notion repository for more details.
-            num_of_piers_across_width = 2
-    elif type_of_pier == "multicolumn":
-        num_of_piers_across_width = num_of_piers_per_lane * lanes
+    else:
+        if type_of_pier == "hammer_head":
+            ratio = round(depth_of_girder / width_m, 2)
+            if ratio >= 0.16 and ratio <= 0.20: # Literature based. Check notion repository for more details.
+                num_of_piers_across_width = 1
+            elif ratio < 0.16: # Literature based. Check notion repository for more details.
+                num_of_piers_across_width = 2
+        elif type_of_pier == "multicolumn":
+            num_of_piers_across_width = num_of_piers_per_lane * lanes
 
+    #this whole logic should be expanded more with respect to zhang
     
     return num_of_piers_along_length, num_of_piers_across_width, radius_of_pier, type_of_pier, pier_cap_type, pier_cross_section
 
