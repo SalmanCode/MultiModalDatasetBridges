@@ -1,15 +1,22 @@
 import random
 from typing import List
-try:
-    from .model_config import BridgeConfig
-except ImportError:
-    from model_config import BridgeConfig
+from .model_config import BridgeConfig
 from dataclasses import asdict
 import pandas as pd
+from random import choice
 
+    
 
+ROAD_TEMPLATES = {
+    "RQ9":  {"lanes": 2, "lane_w": 3.00, "shoulder": 0.0, "edge": 0.50, "cap_range": (0.75, 2.0)},
+    "RQ11": {"lanes": 2, "lane_w": 3.50, "shoulder": 0.0, "edge": 0.50, "cap_range": (0.75, 2.0)},
+    "RQ11_5": {"lanes": 2, "lane_w": 3.50, "shoulder": 0.0, "edge": 1.00, "cap_range": (0.75, 2.0)},
+    "RQ15_5": {"lanes": 3, "lane_w": 3.50, "shoulder": 0.0, "edge": 1.00, "cap_range": (0.75, 2.0)},
+    "RQ31_one_deck": {"lanes": 2, "lane_w": 3.75, "shoulder": 3.0, "edge": 0.75, "cap_range": (0.75, 2.0)},
+    "RQ36_one_deck": {"lanes": 3, "lane_w": 3.75, "shoulder": 2.5, "edge": 0.75, "cap_range": (0.75, 2.0)},
+}
 
-
+# currently we are not using the road template weights: all are equally sampled.
 
 BRIDGE_SPECS = {
     "beam_slab": {
@@ -33,13 +40,19 @@ def pick_span(bridge_type: str, rng: random.Random, step: int = 5, overhang_m: f
 
     return round(raw_span, 1), num_spans, round(total_length, 1), round(depth_of_girder, 1)
 
-def pick_deck_width(lanes: int, include_sidewalks: bool) -> float:
-    lane_width = 3.5  # m
-    hard_shoulder = 3.0    # m each side
-    hard_strip = 0.5    # m each side
-    sidewalk = 1.5 if include_sidewalks else 0.0
-    paved_width = lanes * lane_width + 2 * (hard_shoulder + hard_strip)
-    return round(paved_width + 2 * sidewalk, 2)
+def pick_deck_width(rng: random.Random):
+    """Sample width from a German ROAD_TEMPLATES entry."""
+    names = list(ROAD_TEMPLATES.keys())
+    name = rng.choices(names, k=1)[0]
+    t = ROAD_TEMPLATES[name]
+
+    cap = rng.uniform(*t["cap_range"])
+    roadway_width = t["lanes"] * t["lane_w"] + 2 * (t["shoulder"] + t["edge"])
+    width = round(roadway_width + 2 * cap, 2)
+
+    include_sidewalks = cap > 1.0
+
+    return width, t["lanes"], name, include_sidewalks
 
 def piers_combination(lanes: int, rng: random.Random, bridge_type: str, width_m: float, depth_of_girder: float, num_spans: int) -> int:
     
@@ -80,13 +93,12 @@ def generate_bridge_configs(count: int, bridge_type: str, seed: int | None = Non
     configs: List[BridgeConfig] = []
     step = 5 # this is the step size for span increment. 
     overhang_m = 1.0 # this is the overhang length for the bridge in meters.
-    include_sidewalks = True # this is the flag to include sidewalks in the bridge.
+    #include_sidewalks = True # this is the flag to include sidewalks in the bridge.
 
     for idx in range(1, count + 1):
         bridge_type_picked = bridge_type or rng.choice(list(BRIDGE_SPECS.keys()))
-        lanes = rng.randint(2, 5)
         span, num_spans, total_length, depth_of_girder = pick_span(bridge_type_picked, rng, step, overhang_m)
-        width = pick_deck_width(lanes, include_sidewalks)
+        width, lanes, road_template, include_sidewalks = pick_deck_width(rng)
         number_of_piers_along_length, number_of_piers_across_width, radius_of_pier, type_of_pier, pier_cap_type, pier_cross_section = piers_combination(lanes, rng, bridge_type_picked, width, depth_of_girder, num_spans)
         total_piers = number_of_piers_along_length * number_of_piers_across_width
         configs.append(BridgeConfig(
@@ -97,6 +109,7 @@ def generate_bridge_configs(count: int, bridge_type: str, seed: int | None = Non
             total_length_m=total_length,
             width_m=width, 
             lanes=lanes,
+            road_template=road_template,
             include_sidewalks=include_sidewalks,
             depth_of_girder=depth_of_girder,
             number_of_piers_along_length=number_of_piers_along_length,

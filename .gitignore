@@ -29,5 +29,3 @@ Thumbs.db
 .coverage
 htmlcov/
 
-# Optional: uncomment to ignore all of Dataset (including bridge_summary, descriptions)
-# Dataset/

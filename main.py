@@ -12,12 +12,19 @@ import os
 from pathlib import Path
 import json
 import time
+import logging
 
 from BridgeModelGeneration.bridge_pipeline import BridgePipeline
 from PointCloudSimulation.run_simulations import pointcloud_complete_pipeline
 from PointCloudSimulation.convert_to_npy import convert_bridge_data
 
 BASE_DIR = Path(__file__).parent
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 
 def generate_bridges(num_bridges, bridge_type=None, include_components=False):
@@ -41,8 +48,8 @@ def generate_bridges(num_bridges, bridge_type=None, include_components=False):
         end_time = time.time()
         print(f"Time taken for generating bridges: {end_time - start_time} seconds")
         return True
-    except Exception as e:
-        print(f"\nError generating bridges: {e}")
+    except Exception:
+        logger.exception("Bridge generation failed")
         return False
 
 
@@ -64,8 +71,8 @@ def run_helios_simulation(num_bridges, run_simulation=True, run_segmentation=Fal
         end_time = time.time()
         print(f"Time taken for complete simulation pipeline: {end_time - start_time} seconds")
         return True
-    except Exception as e:
-        print(f"\nError in HELIOS simulation. {e}")
+    except Exception:
+        logger.exception("HELIOS simulation failed")
         return False
 
 
