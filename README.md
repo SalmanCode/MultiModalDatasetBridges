@@ -28,7 +28,7 @@ Run everything with one command:
 
 ```bash
 # Full pipeline: Generate models → Simulate scanning → Segment → Convert to NPY
-python run_full_pipeline.py --num-bridges 5 --include-components --run-simulation --semantic-segmentation
+python main.py --num-bridges 5 --include-components --run-simulation --semantic-segmentation --npy-conversion
 ```
 
 This automatically:
@@ -37,46 +37,6 @@ This automatically:
 3. Performs semantic segmentation
 4. Converts to ML-ready NPY format
 
-### Step-by-Step (Manual)
-
-#### Step 1: Generate Bridge Models
-
-```bash
-# Generate 10 bridges with all components
-python BridgeModelGeneration/bridgemodel_generator.py 10 --include_components
-```
-
-This creates:
-- 3D models in `Dataset/BridgeModels/`
-- Bridge parameters in `Dataset/bridge_summary.json`
-
-#### Step 2: Simulate Laser Scanning
-
-```bash
-# Full pipeline: Generate models → Simulate scanning → Segment → Convert to NPY
-python main.py --num-bridges 1000 --include-components --run-simulation --semantic-segmentation --convert-npy
-```
-
-This creates:
-- Survey and scene files for HELIOS++
-- Simulated point clouds from 8 scanner positions
-- Segmented point clouds by component type
-
-#### Step 3: Convert to NPY
-
-```bash
-cd pointclouds
-python xyztonpy.py
-```
-
-This creates:
-- ML-ready NPY files in `pointclouds/PointCloudsNPY/`
-
-### Test with Few Bridges First
-
-```bash
-# Quick test with 2 bridges
-python run_full_pipeline.py --num-bridges 2 --include-components --run-simulation
 ```
 
 ## Full Pipeline Overview
@@ -103,7 +63,7 @@ Final Dataset (3D models + point clouds + labels)
 
 ## Where to Find Everything
 
-You can find the dataset at  https://huggingface.co/datasets/SyedSalmanAhmed/MultiModalBridgeDataset
+You can find the dataset with 1000 bridges at  https://huggingface.co/datasets/SyedSalmanAhmed/MultiModalBridgeDataset
 
 ### Dataset Structure
 ```
@@ -140,10 +100,6 @@ Dataset/
 └─ bridge_summary.json   # All bridge parameters and metadata
 ```
 
-### Additional Files
-- **Survey Files**: `helios/data/surveys/TLS_bridge_X_survey.xml` - HELIOS++ survey configurations
-- **Scene Files**: `helios/data/scenes/TLS_bridge_X_scene.xml` - HELIOS++ scene definitions
-- **Analysis Plots**: `Generated_Bridges/analysis_plots/` - Statistical visualizations
 
 ## Scanner Setup
 
@@ -170,7 +126,7 @@ The pipeline generates two types of bridges:
 2. **Beam-Slab Bridges** - Multiple beam columns with slab deck
 
 Both types include realistic variations in:
-- Number of spans (2-5)
+- Number of spans (1-5)
 - Total length (35-160 meters)
 - Width (20.5-27.5 meters)
 - Pier configurations (single-column, multi-column, hammer-head)
@@ -180,12 +136,12 @@ Both types include realistic variations in:
 
 ### Master Pipeline (All-in-One)
 ```bash
-python run_full_pipeline.py --num-bridges N [OPTIONS]
+python main.py --num-bridges N [OPTIONS]
 
 # Examples:
-python run_full_pipeline.py --num-bridges 10 --include-components --run-simulation --semantic-segmentation
-python run_full_pipeline.py --num-bridges 5 --bridge-type box_girder --run-simulation
-python run_full_pipeline.py --num-bridges 3 --skip-simulation  # Models only
+python main.py --num-bridges 10 --include-components --run-simulation --semantic-segmentation
+python main.py --num-bridges 5 --bridge-type box_girder --run-simulation
+python main.py --num-bridges 3 --skip-simulation  # Models only
 
 Options:
   --num-bridges N              Number of bridges to generate (required)
@@ -197,32 +153,13 @@ Options:
   --skip-npy-conversion        Skip NPY conversion step
 ```
 
-### Individual Steps
-
-#### Bridge Generation
-```bash
-python BridgeModelGeneration/bridgemodel_generator.py <num_bridges> [--bridge_type TYPE] [--include_components]
-```
-
-#### Point Cloud Simulation
-```bash
-python helios/main.py --num-bridges N [--run-simulation] [--semantic-segmentation]
-```
-
-#### NPY Conversion
-```bash
-python pointclouds/xyztonpy.py
-```
-
 
 ## Acknowledgments
 
-This work builds upon excellent open-source projects:
+This work builds upon open-source projects:
 
 - **[CadQuery](https://github.com/CadQuery/cadquery)** - Parametric 3D CAD modeling in Python
 - **[HELIOS++](https://github.com/3dgeo-heidelberg/helios)** - LiDAR simulation framework developed by 3DGeo Research Group, Heidelberg University
-
-
 
 
 ## Contact

@@ -1,6 +1,6 @@
 # Dataset outputs (large - generate locally)
-Dataset/PointCloudScans/
-Dataset/BridgeModels/
+Dataset/
+
 
 # Simulation outputs
 PointCloudSimulation/output/
