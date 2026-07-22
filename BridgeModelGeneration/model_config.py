@@ -19,6 +19,7 @@ class BridgeConfig:
     pier_type: str
     pier_cap_type: str
     pier_cross_section: str
+    road_template: str
     top_slab_thk: float = 0.25
     bridge_clearance_height: float = 5.0
     bottom_slab_thk: float = 0.35
