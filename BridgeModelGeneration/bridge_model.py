@@ -34,11 +34,10 @@ class BridgeModel:
 
     def compute_box_girder_spacing(self) -> tuple[int, float]:
         
+        # Same depth/width rule as hammer-head piers: shallow/wide → 2 cells,
+        # deeper relative girder (incl. ratio > 1/5) → 1 cell.
         ratio = self.config.depth_of_girder / self.config.width_m
-        if ratio >= 1/6 and ratio <= 1/5:
-            num_of_cells = 1
-        elif ratio < 1/6:
-            num_of_cells = 2
+        num_of_cells = 2 if ratio < 1 / 6 else 1
         box_width = (self.config.width_m - 4) / num_of_cells # here 4 is assumed that the l1 that is the length left out on each side of the box should be between 2 to 4 meters
         return num_of_cells, box_width
 

@@ -2,6 +2,7 @@ import json
 import argparse
 from pathlib import Path
 import os
+import shutil
 from collections import defaultdict
 
 from .scanner_positions import calculate_scanner_positions
@@ -11,7 +12,43 @@ from .semantic_segmentation import semantic_segmentation
 from .convert_to_npy import convert_bridge_data
 
 
-def pointcloud_complete_pipeline(run_simulation=False, num_bridges=None, run_segmentation=False, convert_to_npy=False):
+def _cleanup_bridge_xyz(
+    bridge_id,
+    scan_legs_output_dir,
+    merged_output_dir,
+    segmented_output_dir,
+    bridge_models_dir=None,
+):
+    """Keep training artifacts only: delete XYZ + mesh for this bridge after npy."""
+    targets = [
+        scan_legs_output_dir / f"TLS_{bridge_id}",
+        merged_output_dir / f"TLS_{bridge_id}",
+        segmented_output_dir / f"TLS_{bridge_id}",
+    ]
+    if bridge_models_dir is not None:
+        targets.extend(
+            [
+                bridge_models_dir / bridge_id,
+                bridge_models_dir / f"{bridge_id}.obj",
+                bridge_models_dir / f"{bridge_id}.stl",
+            ]
+        )
+    for path in targets:
+        if path.is_dir():
+            shutil.rmtree(path)
+            print(f"  ✓ Cleaned up {path}")
+        elif path.is_file():
+            path.unlink()
+            print(f"  ✓ Cleaned up {path.name}")
+
+
+def pointcloud_complete_pipeline(
+    run_simulation=False,
+    num_bridges=None,
+    run_segmentation=False,
+    convert_to_npy=False,
+    npy_only=False,
+):
     """Main pipeline to generate point cloud complete dataset.
     This pipeline will generate the point cloud complete dataset including the raw point clouds, segmented point clouds, and merged point clouds.
     It will also convert the point clouds to NPY format if requested.
@@ -20,11 +57,13 @@ def pointcloud_complete_pipeline(run_simulation=False, num_bridges=None, run_seg
         num_bridges: Number of bridges to process (None = all bridges).
         run_segmentation: If True, run semantic segmentation after simulations
         convert_to_npy: If True, convert the point clouds to NPY format
+        npy_only: If True, after npy delete XYZ + mesh for that bridge (keep npy/summary)
     """
     # Paths
     base_dir = Path(__file__).parent.parent
     dataset_dir = base_dir / "Dataset"
     bridge_summary_path = dataset_dir / "bridge_summary.json"
+    bridge_models_dir = dataset_dir / "BridgeModels"
     helios_dir = base_dir / "PointCloudSimulation"
     surveys_dir = helios_dir / "data" / "surveys"
     scenes_dir = helios_dir / "data" / "scenes"
@@ -182,7 +221,21 @@ def pointcloud_complete_pipeline(run_simulation=False, num_bridges=None, run_seg
                     npy_output_dir = scan_output_dir / "npy"
                     os.makedirs(npy_output_dir, exist_ok=True)
                     convert_bridge_data(merged_output_file, npy_output_dir, add_color_padding=True)
-                    
+
+                    if npy_only:
+                        _cleanup_bridge_xyz(
+                            bridge_id,
+                            scan_legs_output_dir,
+                            merged_output_dir,
+                            segmented_output_dir,
+                            bridge_models_dir=bridge_models_dir,
+                        )
+                elif npy_only:
+                    print(
+                        f"  Warning: --npy-only skipped for {bridge_id} "
+                        "(requires --npy-conversion / convert_to_npy)"
+                    )
+
             else:
     
                 print(f"Warning: Output directory not found: {scan_legs_bridge_dir}")
@@ -215,9 +268,14 @@ if __name__ == "__main__":
                         help='Run semantic segmentation after simulations')
     parser.add_argument('--convert_to_npy', action='store_true',
                         help='Convert point clouds to NPY format after simulations')
+    parser.add_argument('--cleanup_xyz', '--npy_only', dest='npy_only', action='store_true',
+                        help='After npy: delete XYZ + mesh; keep npy/summary only')
     
     args = parser.parse_args()
-    pointcloud_complete_pipeline(run_simulation=args.run_simulation, 
-                   num_bridges=args.num_bridges,
-                   run_segmentation=args.semantic_segmentation,
-                   convert_to_npy=args.convert_to_npy)
+    pointcloud_complete_pipeline(
+        run_simulation=args.run_simulation,
+        num_bridges=args.num_bridges,
+        run_segmentation=args.semantic_segmentation,
+        convert_to_npy=args.convert_to_npy,
+        npy_only=args.npy_only,
+    )

@@ -1,6 +1,30 @@
 import json, os, random, argparse
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Optional, Tuple
 import requests
+
+FACT_RULES = (
+    "FACT RULES (must follow):\n"
+    "- span_m is the typical / representative span length. Mention it only as span length.\n"
+    "- total_length_m is the overall bridge length. Mention it only as total length.\n"
+    "- These two are independent. NEVER add or multiply spans to explain total length "
+    "(do not write 'N spans of X m leading to / for a total length of Y m'). "
+    "If both appear, state them as separate facts.\n"
+    "- num_spans is the count of spans; do not compute length from it.\n"
+    "- bridge_type is only 'slab' or 'girder'. slab = flat soffit, no discrete "
+    "longitudinal members. girder = discrete beams/girders under the deck. "
+    "Never write box girder, beam-slab, box_girder, or beam_slab.\n"
+    "- Piers: has_piers says whether supports exist between the abutments. "
+    "number_of_piers_along_length = pier lines along the bridge; "
+    "number_of_piers_across_width = columns in a line; total_piers = total columns. "
+    "Do not name pier styles (hammer-head, multicolumn, solid) or cross-sections "
+    "(circular, rectangular).\n"
+    "- Do not invent materials (no concrete, steel, etc.).\n"
+    "- Do not invent purpose, abutments, railings, or other parts unless they are in the metadata.\n"
+    "- Use only numbers and categories from the metadata. If a field is missing, skip it.\n"
+    "- Lengths are already rounded to 0.1 m. Copy them as written "
+    "(13.6 not 13.60; 5.2 not 5.237). Whole metres have no decimal (30 not 30.0).\n"
+)
+
 
 # === Build LLM prompt for simple descriptions ===
 def build_simple_prompt(meta: Dict[str, Any]) -> str:
@@ -53,10 +77,12 @@ def build_simple_prompt(meta: Dict[str, Any]) -> str:
         "}\n\n"
         "IMPORTANT GUIDELINES:\n"
         "- Keep the answer concise (2-3 sentences, 40-60 words)\n"
-        "- Mention key components: railings, abutments, deck, surrounding environment\n"
+        "- Mention key components the metadata supports (deck, spans, piers, slab vs girder)\n"
         "- Focus on what the point cloud captures, not on data quality\n"
         "- Use professional, clear language\n"
-        "- Mention that it's a 3D representation/digital twin/LiDAR scan\n\n"
+        "- Mention that it's a 3D representation/digital twin/LiDAR scan\n"
+        "- Do not mention the words synthetic, real, generated, CadQuery, or HELIOS\n"
+        f"{FACT_RULES}\n"
         f"BRIDGE METADATA:\n{json.dumps(meta_llm, indent=2, ensure_ascii=False)}"
     )
 
@@ -76,7 +102,6 @@ def build_complex_prompt(meta: Dict[str, Any]) -> str:
         "What does this represent?",
         "Can you describe this in more detail?",
         "I'm interested in this, can you explain?",
-        "What is this object made of?",
         "Could you provide more info about this?",
         "What exactly am I looking at here?",
         "What is this?",
@@ -114,7 +139,7 @@ def build_complex_prompt(meta: Dict[str, Any]) -> str:
         "{\n"
         '  "detailed_description": {\n'
         '    "question": "' + random.choice(detailed_questions) + '",\n'
-        '    "answer": "A detailed 50-100 word description of the bridge covering geometry, structure, dimensions, and purpose"\n'
+        '    "answer": "A detailed 50-100 word description of the bridge covering geometry, structure, and dimensions"\n'
         '  },\n'
         '  "single_round": [\n'
         '    {\n'
@@ -142,27 +167,192 @@ def build_complex_prompt(meta: Dict[str, Any]) -> str:
         "}\n\n"
         "IMPORTANT GUIDELINES:\n"
         "- DO NOT mention data quality issues (occlusion, sparsity, missing scan parts)\n"
-        "- Describe only the bridge itself — geometry, structure, materials, dimensions\n"
-        "- Use specific measurements and technical details from the metadata\n"
-        "- For single_round: Generate 3 different Q&A pairs with varied questions about geometry, materials, purpose, structural details, dimensions, etc.\n"
-        "- For multi_round: Generate 3 rounds with questions showing logical progression and depth\n"
+        "- Describe only the bridge itself — geometry, structure, and dimensions from the metadata\n"
+        "- For single_round: Generate 3 different Q&A pairs about geometry, spans, total length, "
+        "pier counts, width, and slab vs girder. Keep span length and total length in separate questions "
+        "when both are discussed. Do not ask about pier style, box cells, or materials.\n"
+        "- For multi_round: Generate 3 rounds with questions showing logical progression and depth. "
+        "Do not ask about materials unless the metadata lists them.\n"
         "- Use clear, professional technical language\n"
         "- Include specific numeric values from metadata in answers\n"
-        f"- {tone}\n\n"
+        "- Do not mention the words synthetic, real, generated, CadQuery, or HELIOS\n"
+        f"- {tone}\n"
+        f"{FACT_RULES}\n"
         f"BRIDGE METADATA:\n{json.dumps(meta_llm, indent=2, ensure_ascii=False)}"
     )
 
+DEFAULT_SYNTH_SUMMARY = (
+    "/media/syedsalman/salmandrive/SyntheticBridgeDatasetGeneration/"
+    "MultiModalDatasetBridges/Dataset_23.7.26/bridge_summary.json"
+)
+DEFAULT_REAL_DIR = "/media/syedsalman/salmandrive/Dataset/RealPointClouds/measurements/out"
+DEFAULT_OUTPUT = "/media/syedsalman/salmandrive/Dataset/MixedPointCloudv2/annotations"
+ENV_CANDIDATES = [
+    "/media/syedsalman/salmandrive/BridgeMLLM/.env",
+]
+
+# Mixed-training fields only — what a scan can show, same keys for real and synth.
+# CAD classes (box_girder, hammer_head, circular/rectangular) stay out.
+CAPTION_FIELDS = (
+    "bridge_type",
+    "num_spans",
+    "span_m",
+    "total_length_m",
+    "width_m",
+    "lanes",
+    "depth_of_girder",
+    "clearance_height_m",
+    "has_piers",
+    "number_of_piers_along_length",
+    "number_of_piers_across_width",
+    "total_piers",
+)
+CAPTION_ALIASES = {
+    "depth_of_girder": ("depth_of_girder", "deck_structural_depth_m"),
+    "clearance_height_m": ("clearance_height_m", "bridge_clearance_height"),
+}
+
+# Generator / heuristic names → observable soffit class.
+_TYPE_TO_GIRDER = {"beam_slab", "box_girder", "girder", "plattenbalken"}
+_TYPE_TO_SLAB = {"slab", "plattenbruecke", "plattenbrücke"}
+
 # === Model pricing (per 1M tokens) ===
 MODEL_PRICING = {
-    "anthropic/claude-3.5-sonnet": {"input": 3.00, "output": 15.00},
+    "openai/gpt-4o-mini": {"input": 0.15, "output": 0.60},
     "openai/gpt-4o": {"input": 2.50, "output": 10.00},
+    "anthropic/claude-3.5-sonnet": {"input": 3.00, "output": 15.00},
     "google/gemini-2.0-pro-exp": {"input": 1.25, "output": 5.00},
 }
 
-# === Global cost tracking ===
 total_cost = 0.0
 total_input_tokens = 0
 total_output_tokens = 0
+SELECTED_MODELS = ["openai/gpt-4o-mini", "openai/gpt-4o"]
+
+
+def load_env() -> None:
+    """Load OPENROUTER_API_KEY from BridgeMLLM/.env if it is not already set."""
+    if os.getenv("OPENROUTER_API_KEY"):
+        return
+    for path in ENV_CANDIDATES:
+        if not os.path.isfile(path):
+            continue
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, val = line.partition("=")
+                key = key.strip()
+                val = val.strip().strip("'").strip('"')
+                if key and key not in os.environ:
+                    os.environ[key] = val
+        break
+
+
+COUNT_FIELDS = {
+    "num_spans",
+    "lanes",
+    "number_of_piers_along_length",
+    "number_of_piers_across_width",
+    "total_piers",
+}
+
+
+def _round(value: Any, field: Optional[str] = None) -> Any:
+    """One decimal for metres, ints for counts — same look for real and synth."""
+    if isinstance(value, bool) or value is None:
+        return value
+    if isinstance(value, list):
+        return [_round(v, field) for v in value]
+    if field in COUNT_FIELDS:
+        try:
+            return int(round(float(value)))
+        except (TypeError, ValueError):
+            return value
+    if isinstance(value, (int, float)):
+        rounded = round(float(value), 1)
+        return int(rounded) if rounded == int(rounded) else rounded
+    return value
+
+
+def _pick(src: Dict[str, Any], field: str) -> Any:
+    for key in CAPTION_ALIASES.get(field, (field,)):
+        if key in src and src[key] is not None:
+            return src[key]
+    return None
+
+
+GIRDER_SHARE_MIN = 0.30
+
+
+def caption_bridge_type(src: Dict[str, Any]) -> Optional[str]:
+    """slab vs girder from what the cloud can show, not CAD hollowness.
+
+    Real: a girder share above GIRDER_SHARE_MIN means discrete beams are really
+    there. A few stray girder-labelled points are not enough — japan_05 sits at
+    17% girder against 66% deck with a 0.22 m depth over a 12 m span, which is a
+    slab whose soffit got mislabelled, so it falls through to the measured type.
+    Synth: beam_slab and box_girder both → girder.
+    """
+    meta = src.get("_meta") if isinstance(src.get("_meta"), dict) else {}
+    counts = meta.get("class_counts") if isinstance(meta.get("class_counts"), dict) else {}
+    structure = sum(int(v or 0) for k, v in counts.items() if k != "other")
+    if structure > 0:
+        share = int(counts.get("girder") or 0) / structure
+        if share >= GIRDER_SHARE_MIN:
+            return "girder"
+    raw = str(src.get("bridge_type") or "").strip().lower()
+    if raw in _TYPE_TO_GIRDER:
+        return "girder"
+    if raw in _TYPE_TO_SLAB:
+        return "slab"
+    return None
+
+
+def to_caption_meta(object_id: str, src: Dict[str, Any]) -> Dict[str, Any]:
+    """One schema for both domains. Drops nulls so missing facts are skipped."""
+    meta: Dict[str, Any] = {"id": str(object_id), "domain": "bridges"}
+    src = dict(src)
+    if src.get("has_piers") is None:
+        src["has_piers"] = int(src.get("total_piers") or 0) > 0
+    mapped_type = caption_bridge_type(src)
+    if mapped_type is not None:
+        src["bridge_type"] = mapped_type
+    for field in CAPTION_FIELDS:
+        value = _pick(src, field)
+        if value is None or value == []:
+            continue
+        meta[field] = _round(value, field)
+    if mapped_type is not None:
+        meta["bridge_type"] = mapped_type
+    return meta
+
+
+def meta_from_synthetic(bridge_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Map Dataset_23.7.26 bridge_summary.json rows to caption metadata."""
+    return to_caption_meta(str(bridge_data.get("bridge_id")), bridge_data)
+
+
+def meta_from_real(bridge_id: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Map BridgeBank measurements/out/<id>/parameters.json to the same fields."""
+    return to_caption_meta(bridge_id, params)
+
+
+def load_real_bridges(measurements_dir: str) -> List[Dict[str, Any]]:
+    """Load Tier A/B metadata from measurements/out/<id>/parameters.json."""
+    records = []
+    if not os.path.isdir(measurements_dir):
+        raise FileNotFoundError(f"Real measurements dir not found: {measurements_dir}")
+    for name in sorted(os.listdir(measurements_dir)):
+        path = os.path.join(measurements_dir, name, "parameters.json")
+        if not os.path.isfile(path):
+            continue
+        with open(path, encoding="utf-8") as f:
+            params = json.load(f)
+        records.append(meta_from_real(name, params))
+    return records
+
 
 # === OpenRouter API Call ===
 def call_openrouter(prompt: str) -> str:
@@ -171,19 +361,12 @@ def call_openrouter(prompt: str) -> str:
     """
     global total_cost, total_input_tokens, total_output_tokens
     
+    load_env()
     key = os.getenv("OPENROUTER_API_KEY")
     if not key:
         raise RuntimeError("OPENROUTER_API_KEY environment variable is not set.")
-    
-    # Best models for technical dataset generation (ordered by preference)
-    # Claude 3.5 Sonnet: Best for structured technical descriptions
-    # GPT-4o: Excellent backup with strong reasoning
-    # Gemini 2.0 Pro: Good for technical content
-    models = [
-        "anthropic/claude-3.5-sonnet",
-        "openai/gpt-4o",
-        "google/gemini-2.0-pro-exp"
-    ]
+
+    models = list(dict.fromkeys(SELECTED_MODELS))
     
     url = "https://openrouter.ai/api/v1/chat/completions"
     
@@ -294,7 +477,11 @@ def generate_simple_description(meta: Dict[str, Any]) -> Dict[str, Any]:
         "conversations": [
             {
                 "from": "human",
-                "value": data["question"]
+                "value": (
+                    data["question"]
+                    if str(data["question"]).startswith("<point>")
+                    else f"<point>\n{data['question']}"
+                )
             },
             {
                 "from": "gpt",
@@ -355,7 +542,10 @@ def generate_complex_instructions(meta: Dict[str, Any]) -> List[Dict[str, Any]]:
     })
     
     # 2. Single-round conversations
-    for qa in data["single_round"]:
+    rounds = data["single_round"]
+    if isinstance(rounds, dict):
+        rounds = [rounds]
+    for qa in rounds:
         conversations.append({
             "object_id": object_id,
             "conversation_type": "single_round",
@@ -396,122 +586,154 @@ def generate_complex_instructions(meta: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 # === Entry point ===
 if __name__ == "__main__":
-    # Parse command-line arguments
     parser = argparse.ArgumentParser(
-        description="Generate simple descriptions and complex instructions for bridge point cloud data"
+        description="Generate simple descriptions and complex instructions for bridge point clouds"
     )
     parser.add_argument(
         "--input",
         "-i",
         type=str,
-        default="bridge_summary.json",
-        help="Path to the bridge_summary.json file (default: bridge_summary.json)"
+        default=DEFAULT_SYNTH_SUMMARY,
+        help="Synthetic bridge_summary.json (default: Dataset_23.7.26)",
+    )
+    parser.add_argument(
+        "--real-dir",
+        type=str,
+        default=DEFAULT_REAL_DIR,
+        help="BridgeBank measurements/out folder with <id>/parameters.json",
+    )
+    parser.add_argument(
+        "--source",
+        choices=["synthetic", "real", "all"],
+        default="all",
+        help="Which bridges to caption (default: all = synth + real)",
     )
     parser.add_argument(
         "--count",
         "-c",
         type=int,
         default=None,
-        help="Number of bridges to process (default: all bridges in the file)"
+        help="Number of bridges to process (default: all)",
     )
     parser.add_argument(
         "--output",
         "-o",
         type=str,
-        default="Dataset",
-        help="Output directory for JSON and error files (default: Dataset)"
+        default=DEFAULT_OUTPUT,
+        help="Output directory for the two annotation JSON files",
+    )
+    parser.add_argument(
+        "--model",
+        default=os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini"),
+        help="OpenRouter model id (default: openai/gpt-4o-mini)",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Discard existing annotations instead of resuming from them",
     )
     args = parser.parse_args()
-    
+
+    SELECTED_MODELS[:] = [args.model] + [m for m in SELECTED_MODELS if m != args.model]
+
     out_dir = os.path.abspath(args.output)
     os.makedirs(out_dir, exist_ok=True)
-    
-    # Read all bridges from JSON file
-    if not os.path.exists(args.input):
-        print(f"Error: Input file '{args.input}' not found")
-        exit(1)
-    
-    with open(args.input, "r", encoding="utf-8") as f:
-        bridges = json.load(f)
-    
-    # Limit number of bridges if specified
+    simple_output = os.path.join(out_dir, "bridge_simple_descriptions.json")
+    complex_output = os.path.join(out_dir, "bridge_complex_instructions.json")
+
+    metas: List[Dict[str, Any]] = []
+    if args.source in ("synthetic", "all"):
+        if not os.path.exists(args.input):
+            print(f"Error: Input file '{args.input}' not found")
+            raise SystemExit(1)
+        with open(args.input, "r", encoding="utf-8") as f:
+            synth_rows = json.load(f)
+        metas.extend(meta_from_synthetic(row) for row in synth_rows)
+    if args.source in ("real", "all"):
+        metas.extend(load_real_bridges(args.real_dir))
+
     if args.count is not None:
-        bridges = bridges[:args.count]
-        print(f"Processing {len(bridges)} of {len(bridges)} bridges (limited by --count)...")
+        metas = metas[: args.count]
+        print(f"Processing {len(metas)} bridges (limited by --count)...")
     else:
-        print(f"Processing all {len(bridges)} bridges...")
-    
-    # Collect conversations and errors
-    simple_descriptions = []
-    complex_instructions = []
-    errors = []
-    
-    # Process each bridge
-    for bridge_data in bridges:
-        # Specify fields you DON'T want in the caption
-        EXCLUDE_FIELDS = {
-            "bridge_id",           # Already handled separately as 'id'
-            "include_sidewalks",   # Maybe too minor?
-            "top_slab_thk",
-            "bottom_slab_thk",
-            "web_thk",
-            "wing_wall_thickness"
-        }
-        
-        # Take all fields except excluded ones
-        meta = {k: v for k, v in bridge_data.items() if k not in EXCLUDE_FIELDS}
-        meta["id"] = str(bridge_data.get("bridge_id"))
-        meta["domain"] = "bridges"
-        
+        print(f"Processing all {len(metas)} bridges...")
+
+    def load_existing(path: str) -> List[Dict[str, Any]]:
+        """Reuse finished bridges so a restart never re-pays for them."""
+        if args.overwrite or not os.path.isfile(path):
+            return []
+        try:
+            with open(path, encoding="utf-8") as file:
+                data = json.load(file)
+        except json.JSONDecodeError:
+            print(f"Ignoring unreadable {path}, starting that file fresh")
+            return []
+        return data if isinstance(data, list) else []
+
+    simple_descriptions: List[Dict[str, Any]] = load_existing(simple_output)
+    complex_instructions: List[Dict[str, Any]] = load_existing(complex_output)
+    done_simple = {r.get("object_id") for r in simple_descriptions}
+    done_complex = {r.get("object_id") for r in complex_instructions}
+    if done_simple or done_complex:
+        print(
+            f"Resuming: {len(done_simple)} simple and {len(done_complex)} complex "
+            "bridges already done"
+        )
+    errors: List[str] = []
+
+    def save_outputs() -> None:
+        # tmp + replace, because an interrupt during the write would leave a
+        # truncated file that the next run could not resume from
+        for path, payload in ((simple_output, simple_descriptions),
+                              (complex_output, complex_instructions)):
+            tmp = f"{path}.tmp"
+            with open(tmp, "w", encoding="utf-8") as file:
+                json.dump(payload, file, indent=2, ensure_ascii=False)
+            os.replace(tmp, path)
+
+    for meta in metas:
+        need_simple = meta["id"] not in done_simple
+        need_complex = meta["id"] not in done_complex
+        if not need_simple and not need_complex:
+            continue
+
         print(f"\n{'='*60}")
         print(f"Processing {meta['id']}...")
         print(f"{'='*60}")
-        
-        # Generate simple description
-        try:
-            print("Generating simple description...")
-            simple_conv = generate_simple_description(meta)
-            simple_descriptions.append(simple_conv)
-            print(f"Generated simple description for {meta['id']}")
-        except Exception as e:
-            print(f"Failed to generate simple description: {e}")
-            errors.append(f"[bridge {meta['id']}] simple description: {e}")
-        
-        # Generate complex instructions
-        try:
-            print("Generating complex instructions...")
-            complex_convs = generate_complex_instructions(meta)
-            complex_instructions.extend(complex_convs)
-            print(f"Generated {len(complex_convs)} complex conversations for {meta['id']}")
-        except Exception as e:
-            print(f"Failed to generate complex instructions: {e}")
-            errors.append(f"[bridge {meta['id']}] complex instructions: {e}")
-    
-    # Write single error log if any errors occurred
+
+        if need_simple:
+            try:
+                print("Generating simple description...")
+                simple_descriptions.append(generate_simple_description(meta))
+                print(f"Generated simple description for {meta['id']}")
+            except Exception as e:
+                print(f"Failed to generate simple description: {e}")
+                errors.append(f"[bridge {meta['id']}] simple description: {e}")
+
+        if need_complex:
+            try:
+                print("Generating complex instructions...")
+                complex_convs = generate_complex_instructions(meta)
+                complex_instructions.extend(complex_convs)
+                print(f"Generated {len(complex_convs)} complex conversations for {meta['id']}")
+            except Exception as e:
+                print(f"Failed to generate complex instructions: {e}")
+                errors.append(f"[bridge {meta['id']}] complex instructions: {e}")
+
+        save_outputs()
+
     if errors:
         error_log_path = os.path.join(out_dir, "caption_generation_errors.txt")
         with open(error_log_path, "w", encoding="utf-8") as f:
             f.write("\n".join(errors))
         print(f"Logged {len(errors)} error(s) to {error_log_path}")
-    
-    # Save outputs
-    simple_output = os.path.join(out_dir, "bridge_simple_descriptions.json")
-    complex_output = os.path.join(out_dir, "bridge_complex_instructions.json")
-    
-    with open(simple_output, "w", encoding="utf-8") as file:
-        json.dump(simple_descriptions, file, indent=2, ensure_ascii=False)
+
     print(f"\n{'='*60}")
     print(f"Saved {len(simple_descriptions)} simple descriptions to {simple_output}")
-    
-    with open(complex_output, "w", encoding="utf-8") as file:
-        json.dump(complex_instructions, file, indent=2, ensure_ascii=False)
     print(f"Saved {len(complex_instructions)} complex instructions to {complex_output}")
     print(f"{'='*60}")
     print(f"\nComplete! Total conversations: {len(simple_descriptions) + len(complex_instructions)}")
-    
-    # Print cost summary
-    
-    print(f"COST SUMMARY")
+    print("COST SUMMARY")
     print(f"Total Input Tokens:  {total_input_tokens:,}")
     print(f"Total Output Tokens: {total_output_tokens:,}")
     print(f"Total Tokens:        {total_input_tokens + total_output_tokens:,}")
