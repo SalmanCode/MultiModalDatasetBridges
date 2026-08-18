@@ -7,6 +7,7 @@ class BridgeConfig:
     bridge_type: str
     span_m: float
     num_spans: int
+    inner_deck_length_m: float
     total_length_m: float
     width_m: float
     lanes: int
@@ -26,4 +27,5 @@ class BridgeConfig:
     web_thk: float = 0.5
     deck_thickness: float = 0.3
     wing_wall_thickness: float = 0.5
+    wing_wall_extension_m: float = 0.0
     
