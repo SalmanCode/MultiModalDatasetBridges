@@ -46,8 +46,6 @@ class BridgeModel:
         
         deck_length = self.config.total_length_m
         total_width = self.config.width_m
-        num_spans = self.config.num_spans
-        span_length = self.config.span_m
         depth_of_girder = self.config.depth_of_girder
 
 
@@ -209,23 +207,11 @@ class BridgeModel:
         if self.config.num_spans <= 1:
             return []
         else:
-            num_of_spans= self.config.num_spans
-            interior_span_length = round(self.config.total_length_m / (num_of_spans - 0.6), 1)
-            end_span_length = round(interior_span_length * 0.7, 1)
-
-            #create a list of spans
-            spans = [end_span_length] + [interior_span_length] * (num_of_spans-2) + [end_span_length]
-            pier_positions = []
-            pos = 0.0
-            for span in spans[:-1]:
-                pos += span
-
-                pier_positions.append(round(pos, 1))
-
-            normalised_pier_positions = [round(p - (self.config.total_length_m / 2), 1) for p in pier_positions]
-            
-            return normalised_pier_positions
-
+            overhang_m = 1.0  # must match param_gen.py pick_span()'s overhang_m
+            return [
+                round(-self.config.total_length_m / 2 + overhang_m + i * self.config.span_m, 1)
+                for i in range(1, self.config.num_spans)
+            ]
 
     def make_piers(self) -> Optional[cq.Workplane]:
 
@@ -437,7 +423,6 @@ class BridgeModel:
         
         components: Dict[str, cq.Workplane | None] = {
             "deck": self.make_deck(),
-            "approach_slabs": self.make_approach_slabs(),
             "railings": self.make_railings(),
             "piers": self.make_piers(),
             "wing_walls": self.make_wing_walls(),

@@ -30,13 +30,13 @@ BRIDGE_SPECS = {
 }
 
 
-def pick_span(bridge_type: str, rng: random.Random, step: int = 5, overhang_m: float = 1.0) -> tuple[float, int, float]:
+def pick_span(bridge_type: str, rng: random.Random, overhang_m: float = 1.0) -> tuple[float, int, float]:
+    """Pick a span for a bridge."""
     spec = BRIDGE_SPECS[bridge_type]
     raw_span = rng.uniform(*spec["span"])
     depth_of_girder = raw_span * rng.uniform(*spec["depth_ratio"])
     num_spans = rng.randint(1, 5)
     total_length = raw_span * num_spans + 2 * overhang_m
-    total_length = total_length - total_length % step + step
 
     return round(raw_span, 1), num_spans, round(total_length, 1), round(depth_of_girder, 1)
 
@@ -94,14 +94,13 @@ def piers_combination(lanes: int, rng: random.Random, bridge_type: str, width_m:
 
 def generate_bridge_configs(count: int, bridge_type: str, seed: int | None = None) -> List[BridgeConfig]:
     rng = random.Random(seed)
-    configs: List[BridgeConfig] = []
-    step = 5 # this is the step size for span increment. 
+    configs: List[BridgeConfig] = [] 
     overhang_m = 1.0 # this is the overhang length for the bridge in meters.
     #include_sidewalks = True # this is the flag to include sidewalks in the bridge.
 
     for idx in range(1, count + 1):
         bridge_type_picked = bridge_type or rng.choice(list(BRIDGE_SPECS.keys()))
-        span, num_spans, total_length, depth_of_girder = pick_span(bridge_type_picked, rng, step, overhang_m)
+        span, num_spans, total_length, depth_of_girder = pick_span(bridge_type_picked, rng, overhang_m)
         width, lanes, road_template, include_sidewalks = pick_deck_width(rng)
         number_of_piers_along_length, number_of_piers_across_width, radius_of_pier, type_of_pier, pier_cap_type, pier_cross_section = piers_combination(lanes, rng, bridge_type_picked, width, depth_of_girder, num_spans)
         total_piers = number_of_piers_along_length * number_of_piers_across_width
