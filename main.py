@@ -53,7 +53,13 @@ def generate_bridges(num_bridges, bridge_type=None, include_components=False):
         return False
 
 
-def run_helios_simulation(num_bridges, run_simulation=True, run_segmentation=False, npy_conversion=False):
+def run_helios_simulation(
+    num_bridges,
+    run_simulation=True,
+    run_segmentation=False,
+    npy_conversion=False,
+    npy_only=False,
+):
     """Step 2: Runing HELIOS++ simulation to generate point clouds"""
     print(f"\n{'='*70}")
     print(f"STEP 2: Running HELIOS++ simulations")
@@ -65,7 +71,8 @@ def run_helios_simulation(num_bridges, run_simulation=True, run_segmentation=Fal
             run_simulation=run_simulation,
             num_bridges=num_bridges,
             run_segmentation=run_segmentation,
-            convert_to_npy=npy_conversion
+            convert_to_npy=npy_conversion,
+            npy_only=npy_only,
         )
         print(f"\nSuccessfully completed simulation pipeline")
         end_time = time.time()
@@ -145,8 +152,8 @@ Examples:
     # Full pipeline with 5 bridges
     python main.py--num-bridges 5
 
-    # Complete pipeline with components, simulation, and segmentation and npy conversion 
-    python main.py --num-bridges 10 --include-components --run-simulation --semantic-segmentation --npy-conversion
+    # Complete pipeline; keep npy + summary only
+    python main.py --num-bridges 10 --include-components --run-simulation --semantic-segmentation --npy-conversion --npy-only
 
     """
     )
@@ -165,6 +172,8 @@ Examples:
     # Conversion options
     parser.add_argument('--npy-conversion', action='store_true',
                         help='Convert point clouds to NPY format')
+    parser.add_argument('--npy-only', action='store_true',
+                        help='After npy: delete XYZ + mesh per bridge; keep npy + bridge_summary only')
     
     args = parser.parse_args()
     
@@ -176,6 +185,12 @@ Examples:
     if args.npy_conversion and not args.run_simulation:
         print("Warning: --npy-conversion requires --run-simulation")
         args.run_simulation = True
+
+    if args.npy_only and not args.npy_conversion:
+        print("Warning: --npy-only requires --npy-conversion; enabling it")
+        args.npy_conversion = True
+        if not args.run_simulation:
+            args.run_simulation = True
     
     # Print configuration
     print("\n" + "="*70)
@@ -188,6 +203,7 @@ Examples:
     print(f"  • Run simulation: {args.run_simulation}")
     print(f"  • Semantic segmentation: {args.semantic_segmentation}")
     print(f"  • Convert to NPY: {args.npy_conversion}")
+    print(f"  • NPY only (delete XYZ + mesh): {args.npy_only}")
     print()
     
     # Execute pipeline
@@ -200,7 +216,13 @@ Examples:
     
     # Step 2: Run HELIOS simulation (if requested)
     if args.run_simulation:
-        if not run_helios_simulation(args.num_bridges, args.run_simulation, args.semantic_segmentation, args.npy_conversion):
+        if not run_helios_simulation(
+            args.num_bridges,
+            args.run_simulation,
+            args.semantic_segmentation,
+            args.npy_conversion,
+            args.npy_only,
+        ):
             print("\n❌ Pipeline failed at HELIOS simulation step")
             sys.exit(1)
         

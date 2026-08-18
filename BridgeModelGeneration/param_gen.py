@@ -75,12 +75,16 @@ def piers_combination(lanes: int, rng: random.Random, bridge_type: str, width_m:
 
     else:
         if type_of_pier == "hammer_head":
+            # depth/width bands from literature (notion): wider shallow decks → 2
+            # hammer heads; deeper relative girders → 1. ratio > 0.20 also → 1.
             ratio = round(depth_of_girder / width_m, 2)
-            if ratio >= 0.16 and ratio <= 0.20: # Literature based. Check notion repository for more details.
-                num_of_piers_across_width = 1
-            elif ratio < 0.16: # Literature based. Check notion repository for more details.
+            if ratio < 0.16:
                 num_of_piers_across_width = 2
+            else:
+                num_of_piers_across_width = 1
         elif type_of_pier == "multicolumn":
+            num_of_piers_across_width = num_of_piers_per_lane * lanes
+        else:
             num_of_piers_across_width = num_of_piers_per_lane * lanes
 
     #this whole logic should be expanded more with respect to zhang
