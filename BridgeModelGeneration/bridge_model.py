@@ -44,7 +44,7 @@ class BridgeModel:
     def make_box_girder_deck(self) -> cq.Workplane:
         """ This makes deck with box girders"""
         
-        deck_length = self.config.total_length_m
+        deck_length = self.config.inner_deck_length_m
         total_width = self.config.width_m
         depth_of_girder = self.config.depth_of_girder
 
@@ -113,7 +113,8 @@ class BridgeModel:
     def make_beam_slab_deck(self) -> cq.Workplane:
         """ This makes beam slab or more like Tee girders """
 
-        deck_length = self.config.total_length_m
+        deck_length = self.config.inner_deck_length_m
+        total_length = self.config.total_length_m
         width = self.config.width_m
         deck_thickness = getattr(self.config, "deck_thickness", 0.3)
         depth_of_girder = self.config.depth_of_girder
@@ -127,23 +128,23 @@ class BridgeModel:
         ratio = width / depth_of_girder
         #logger.info(f"Ratio: {ratio}")
 
-        deck_slab = cq.Workplane("XY").box(deck_length, width, deck_thickness, centered=(True, True, False))
+        deck_slab = cq.Workplane("XY").box(total_length, width, deck_thickness, centered=(True, True, False)) # this will be total lenght because we want to conver the wingwall
         
         girders = cq.Workplane("YZ")
         for i in range(num_of_girders):
             girder_y_position = -(girder_distance * (num_of_girders - 1) / 2)  + girder_distance * i
             girder = cq.Workplane("YZ").rect(girder_thickness, -depth_of_girder, centered=(True, False)).extrude(deck_length)
-            
+            # Chamfer the solid girder first; fused deck/compound solids fail in OCC.
+            girder = (
+                girder
+                .faces("-Z")          # bottom faces
+                .edges("|X")          # long soffit edges along the girder
+                .chamfer(chamfer_radius)
+            )
             girder = girder.translate((-deck_length / 2, girder_y_position , 0)) # remember tranlsation always happens in global coordinates so x, y, z.
             girders = girders.union(girder)
 
-        
-        bridge_core = (
-            deck_slab.union(girders)
-            .faces("-Z")          # bottom faces
-            .edges("|X")          # edges parallel to Y (girder webs)
-            .chamfer(chamfer_radius)
-        )
+        bridge_core = deck_slab.union(girders)
         
         return bridge_core
         
@@ -165,7 +166,7 @@ class BridgeModel:
         railing_pole_height = 1.0 # this is taken from RZ standards
         railing_pole_distance = 2.5
         railing_pole_side_length = 0.07 # this is assuming that the pole is a square in xy plane with 7 cm side length
-        deck_length = self.config.total_length_m 
+        deck_length = self.config.inner_deck_length_m 
         
 
         num_of_poles = max(2, int(deck_length / (railing_pole_distance)))
@@ -209,7 +210,7 @@ class BridgeModel:
         else:
             overhang_m = 1.0  # must match param_gen.py pick_span()'s overhang_m
             return [
-                round(-self.config.total_length_m / 2 + overhang_m + i * self.config.span_m, 1)
+                round(-self.config.inner_deck_length_m / 2 + overhang_m + i * self.config.span_m, 1)
                 for i in range(1, self.config.num_spans)
             ]
 
@@ -324,11 +325,11 @@ class BridgeModel:
         bridge_seating_height = self.config.depth_of_girder
         bridge_seating_width = 2
         wing_wall_cap_height = 0.5 * self.config.bridge_clearance_height
-        wing_wall_top_length = 4.0
+        wing_wall_top_length = self.config.wing_wall_extension_m # because this is impacting the length of the bridge so we define as a config parameter.
         wing_wall_bottom_length = 2.0
         wing_wall_side_length = self.config.bridge_clearance_height
 
-        deck_length = self.config.total_length_m
+        deck_length = self.config.inner_deck_length_m
         deck_width = self.config.width_m
 
         wing_wall_slab_slot_length = bridge_seating_width
@@ -393,14 +394,14 @@ class BridgeModel:
             self.config.bridge_clearance_height,
             back_wall_thickness,
             centered=(True, False, False)
-        ).translate((self.config.total_length_m/2 - back_wall_thickness, 0, -self.config.depth_of_girder - self.config.bridge_clearance_height))       
+        ).translate((self.config.inner_deck_length_m/2 - back_wall_thickness, 0, -self.config.depth_of_girder - self.config.bridge_clearance_height))       
         # Back retaining wall
         wall_mirror = back_wall.mirror("YZ")  
     
         
         # this adds a thinner wall at the end of back wall to close the end of girders.
         thinner_wall = cq.Workplane("YZ").box(self.config.width_m - 2 * self.config.wing_wall_thickness, self.config.bridge_clearance_height + self.config.depth_of_girder, 0.5, centered=(True, False, False))
-        thinner_wall = thinner_wall.translate((self.config.total_length_m/2, 0, -self.config.bridge_clearance_height - self.config.depth_of_girder))    
+        thinner_wall = thinner_wall.translate((self.config.inner_deck_length_m/2, 0, -self.config.bridge_clearance_height - self.config.depth_of_girder))    
         thinner_wall_mirror = thinner_wall.mirror("YZ")
         thinner_wall_combined = thinner_wall.union(thinner_wall_mirror)
         
