@@ -4,19 +4,26 @@ A pipeline for generating synthetic bridge datasets with 3D models, simulated te
 
 ## About
 
-This work is part of ongoing research for the **I3CE Conference 2026**. If you use this dataset or methodology in your research, please consider citing this work.
+Developed at the Chair of Computing in Civil and Building Engineering (Prof. Borrmann), Technical University of Munich.
+
+Labelled point clouds of real bridges are scarce, and annotating them by hand is slow. This framework generates bridges with known geometry and pairs each scan with text, so it can be used to train and test models that read bridge point clouds, e.g. multimodal LLMs that describe a bridge or estimate its dimensions, and to check them against real scans.
+
+Contact: salman.ahmed@tum.de
 
 ## Versions
 
 | version | code | dataset | |
 | --- | --- | --- | --- |
 | **v2.0** | [`v2.0`](../../tree/v2.0) | [Hugging Face `v2.0/`](https://huggingface.co/datasets/SyedSalmanAhmed/MultiModalBridgeDataset/tree/v2.0) | new geometry fitted to real bridges |
-| v1.1 | [`v1.1`](../../tree/v1.1) | none | final v1 generator |
 | v1.0 | [`v1.0`](../../tree/v1.0) | [Hugging Face `Dataset1000bridges.zip`](https://huggingface.co/datasets/SyedSalmanAhmed/MultiModalBridgeDataset/tree/v1.0) | first release |
 
 v2.0 data is not compatible with v1.0. Use the code tag that matches the dataset you downloaded. See [CHANGELOG.md](CHANGELOG.md).
 
 ## What's new in v2.0
+
+v2.0 is the synthetic dataset used in *BridgePointLLM: Domain-specific Multimodal LLMs for Bridge Point Cloud Understanding* (submitted). For that work the generator was extended so that the synthetic bridges cover the configurations and dimensions seen in real scans, which v1.0 did not.
+
+![v2.0 bridges](docs/images/v2_bridges.png)
 
 - Bridge shapes fitted to 32 measured real bridges, in four families
 - Length sampled first, spans derived from it, end spans shorter than interior spans
@@ -30,6 +37,8 @@ v2.0 data is not compatible with v1.0. Use the code tag that matches the dataset
 The real bridges are not part of this release. For access, contact salman.ahmed@tum.de.
 
 ## Pipeline
+
+![pipeline](docs/images/pipeline.png)
 
 ```
 Parameter Generation (param_gen.py)
@@ -95,19 +104,6 @@ Dataset/
    └─ bridge_complex_instructions.json
 ```
 
-## Bridge Geometry
-
-Each bridge belongs to one of four families:
-
-| family | spans | L/W (median) | clearance |
-| --- | --- | --- | --- |
-| `wide_crossing` | 1 | 0.7 | 3.5-6.0 m |
-| `minor_road` | 1 | 2.7 | 1.0-4.0 m |
-| `single_span_rq` | 1 | 2.1 | 3.0-5.5 m |
-| `multi_span_rq` | 2-5 | 4.2 | 4.5-6.5 m |
-
-Widths follow German road cross-sections (RQ9 to RQ36), plus footway and rural sections.
-
 ## Scanner Setup
 
 Each bridge is scanned from 8 positions. Heights are relative to the deck or the ground.
@@ -141,4 +137,4 @@ For questions or collaboration:
 
 ## License
 
-MIT License
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
