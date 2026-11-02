@@ -72,7 +72,7 @@ class BridgeModel:
 
         top_slab = (
             cq.Workplane("YZ")
-            .box(total_width, top_slab_thk, deck_length, centered=(True, False, True)))
+            .box(total_width, top_slab_thk, self.config.total_length_m, centered=(True, False, True)))
 
 
         boxes = cq.Workplane("YZ")
