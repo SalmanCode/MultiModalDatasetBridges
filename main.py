@@ -13,6 +13,9 @@ from pathlib import Path
 import json
 import time
 import logging
+import random
+
+import numpy as np
 
 from BridgeModelGeneration.bridge_pipeline import BridgePipeline
 from PointCloudSimulation.run_simulations import pointcloud_complete_pipeline
@@ -27,7 +30,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def generate_bridges(num_bridges, bridge_type=None, include_components=False):
+def generate_bridges(num_bridges, bridge_type=None, include_components=False, seed=None):
     """Step 1: Generating 3D bridge models
     This will call the BridgePipeline class to generate the bridge models.
     Use include components to create separate component files (approach_slabs, deck, etc.)."""
@@ -42,7 +45,7 @@ def generate_bridges(num_bridges, bridge_type=None, include_components=False):
             num_bridges=num_bridges,
             bridge_type=bridge_type,
             include_components=include_components,
-            seed=None
+            seed=seed
         )
         print(f"\nSuccessfully generated {num_bridges} bridges")
         end_time = time.time()
@@ -60,6 +63,7 @@ def run_helios_simulation(
     npy_conversion=False,
     npy_only=False,
     skip_existing=False,
+    keep_meshes=False,
 ):
     """Step 2: Runing HELIOS++ simulation to generate point clouds"""
     print(f"\n{'='*70}")
@@ -75,6 +79,7 @@ def run_helios_simulation(
             convert_to_npy=npy_conversion,
             npy_only=npy_only,
             skip_existing=skip_existing,
+            keep_meshes=keep_meshes,
         )
         print(f"\nSuccessfully completed simulation pipeline")
         end_time = time.time()
@@ -162,7 +167,7 @@ Examples:
     # Bridge generation options
     parser.add_argument('--num-bridges', type=int, required=True,
                         help='Number of bridges to generate')
-    parser.add_argument('--bridge-type', type=str, choices=['box_girder', 'beam_slab'],
+    parser.add_argument('--bridge-type', type=str, choices=['slab', 'girder'],
                         help='Type of bridge to generate (default: mixed)')
     parser.add_argument('--include-components', action='store_true',
                         help='Generate separate component files (approach_slabs, deck, etc.)')
@@ -176,10 +181,18 @@ Examples:
                         help='Convert point clouds to NPY format')
     parser.add_argument('--npy-only', action='store_true',
                         help='After npy: delete XYZ + mesh per bridge; keep npy + bridge_summary only')
+    parser.add_argument('--keep-meshes', action='store_true',
+                        help='With --npy-only, delete only the XYZ and keep the component meshes')
     parser.add_argument('--resume', '--skip-existing', dest='resume', action='store_true',
                         help='Do not regenerate CAD/summary; skip bridges that already have npy')
+    parser.add_argument('--seed', type=int, default=None,
+                        help='Random seed for parameter sampling and npy subsampling')
     
     args = parser.parse_args()
+
+    if args.seed is not None:
+        random.seed(args.seed)
+        np.random.seed(args.seed)
     
     # Validate arguments
     if args.semantic_segmentation and not args.run_simulation:
@@ -209,6 +222,7 @@ Examples:
     print(f"  • Convert to NPY: {args.npy_conversion}")
     print(f"  • NPY only (delete XYZ + mesh): {args.npy_only}")
     print(f"  • Resume / skip existing npy: {args.resume}")
+    print(f"  • Seed: {args.seed}")
     print()
     
     # Execute pipeline
@@ -217,7 +231,7 @@ Examples:
     # Step 1: Generate bridges (skip on resume — that would overwrite bridge_summary.json)
     if args.resume:
         print("Resume: skipping CAD generation; using existing Dataset/bridge_summary.json")
-    elif not generate_bridges(args.num_bridges, args.bridge_type, args.include_components):
+    elif not generate_bridges(args.num_bridges, args.bridge_type, args.include_components, args.seed):
         print("\n❌ Pipeline failed at bridge generation step")
         sys.exit(1)
     
@@ -230,6 +244,7 @@ Examples:
             args.npy_conversion,
             args.npy_only,
             skip_existing=args.resume,
+            keep_meshes=args.keep_meshes,
         ):
             print("\n❌ Pipeline failed at HELIOS simulation step")
             sys.exit(1)

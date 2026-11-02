@@ -1,44 +1,35 @@
 # Synthetic Bridge Dataset with Multi-Modal Data
 
-A complete pipeline for generating synthetic bridge datasets with both 3D models and realistic laser-scanned point clouds. This repository creates parametric bridge models and simulates terrestrial laser scanning (TLS) from multiple viewpoints, providing ground-truth data for point cloud analysis, semantic segmentation, and AI model training.
+A pipeline for generating synthetic bridge datasets with 3D models, simulated terrestrial laser scans (TLS) and text captions. It builds parametric bridge models with CadQuery, scans them from 8 positions with HELIOS++, and writes ML-ready point clouds and question-answer captions.
 
 ## About
 
 This work is part of ongoing research for the **I3CE Conference 2026**. If you use this dataset or methodology in your research, please consider citing this work.
 
-## What This Pipeline Does
+## Versions
 
-The complete workflow goes through three main stages:
+| version | code | dataset | |
+| --- | --- | --- | --- |
+| **v2.0** | [`v2.0`](../../tree/v2.0) | [Hugging Face `v2.0/`](https://huggingface.co/datasets/SyedSalmanAhmed/MultiModalBridgeDataset/tree/v2.0) | new geometry fitted to real bridges |
+| v1.1 | [`v1.1`](../../tree/v1.1) | none | final v1 generator |
+| v1.0 | [`v1.0`](../../tree/v1.0) | [Hugging Face `Dataset1000bridges.zip`](https://huggingface.co/datasets/SyedSalmanAhmed/MultiModalBridgeDataset/tree/v1.0) | first release |
 
-1. **Parameter Generation** → Creates randomized but realistic bridge configurations (dimensions, spans, pier types, etc.)
-2. **3D Model Generation** → Uses CadQuery to build parametric 3D bridge models with separate components (deck, piers, railings, etc.)
-3. **Point Cloud Simulation** → Uses HELIOS++ to simulate laser scanning from 8 positions around each bridge, generating realistic point clouds
+v2.0 data is not compatible with v1.0. Use the code tag that matches the dataset you downloaded. See [CHANGELOG.md](CHANGELOG.md).
 
-You end up with:
-- Parametric 3D bridge models (OBJ format)
-- Bridge metadata (dimensions, configurations)
-- Simulated point clouds from multiple scanner positions
-- Semantically segmented point clouds (each component labeled)
+## What's new in v2.0
 
-## Quick Start
+- Bridge shapes fitted to 32 measured real bridges, in four families
+- Length sampled first, spans derived from it, end spans shorter than interior spans
+- Widths from 2.8 m (footway) to 54 m (dual carriageway)
+- Slab and girder decks
+- Multicolumn and wall piers, cylindrical / rectangular / trapezoidal columns
+- Wing wall abutments (single span) and spill-through abutments (multi span)
+- Ground in the scene, so the scan sees the bridge like a real TLS scan does
+- Templated captions
 
-### Complete Pipeline (Recommended)
+The real bridges are not part of this release. For access, contact salman.ahmed@tum.de.
 
-Run everything with one command:
-
-```bash
-# Full pipeline: Generate models → Simulate scanning → Segment → Convert to NPY
-python main.py --num-bridges 5 --include-components --run-simulation --semantic-segmentation --npy-conversion
-```
-
-This automatically:
-1. Generates 3D bridge models with components
-2. Simulates laser scanning with HELIOS++
-3. Performs semantic segmentation
-4. Converts to ML-ready NPY format
-
-
-## Full Pipeline Overview
+## Pipeline
 
 ```
 Parameter Generation (param_gen.py)
@@ -47,119 +38,100 @@ Bridge Configuration (bridge_summary.json)
     ↓
 3D Model Generation (CadQuery + bridge_model.py)
     ↓
-3D Models (OBJ files: deck, piers, railings, etc.)
+HELIOS++ Simulation (8 scanner positions)
     ↓
-Survey Planning (calculate scanner positions)
+Point Clouds (XYZ) → Segmentation → NPY (8192 x 6)
     ↓
-HELIOS++ Simulation (laser scanning from 8 positions)
-    ↓
-Point Clouds (XYZ files from each scanner position)
-    ↓
-Semantic Segmentation (label each point by component)
-    ↓
-Final Dataset (3D models + point clouds + labels)
+Captions (text_captions_generation.py)
 ```
 
-## Where to Find Everything
+## Installation
 
-You can find the dataset with 1000 bridges at  https://huggingface.co/datasets/SyedSalmanAhmed/MultiModalBridgeDataset
+```bash
+conda env create -f environment.yml
+conda activate cadq
+```
 
-### Dataset Structure
+## Quick Start
+
+```bash
+python main.py --num-bridges 1000 --seed 2026 --include-components --run-simulation --npy-conversion --npy-only --keep-meshes
+python TextGeneration/text_captions_generation.py --template --source synthetic
+```
+
+| option | |
+| --- | --- |
+| `--num-bridges N` | number of bridges (required) |
+| `--seed S` | random seed |
+| `--bridge-type slab\|girder` | one deck type only (default: mixed) |
+| `--include-components` | one OBJ per component |
+| `--run-simulation` | run HELIOS++ |
+| `--semantic-segmentation` | per-component XYZ |
+| `--npy-conversion` | 8192 x 6 npy files |
+| `--npy-only` | delete XYZ and meshes after npy |
+| `--keep-meshes` | with `--npy-only`, keep the meshes |
+| `--resume` | skip bridges that already have an npy |
+
+## Dataset Structure
+
 ```
 Dataset/
+├─ bridge_summary.json          # all bridge parameters
 ├─ BridgeModels/
-│  └─ bridge_X/          # 3D models for each bridge
-│     ├─ approach_slabs.obj
-│     ├─ back_walls.obj
+│  ├─ bridge_X.obj              # full bridge
+│  └─ bridge_X/
 │     ├─ deck.obj
-│     ├─ piers.obj
 │     ├─ railings.obj
-│     └─ wing_walls.obj
-│
+│     ├─ piers.obj              # multi span only
+│     ├─ abutments.obj
+│     ├─ ground.obj             # scene only, not in the point cloud
+│     └─ components.json
 ├─ PointCloudScans/
-│  ├─ raw/               # Raw laser scan data
-│  │  └─ bridge_X/
-│  │     ├─ leg000_points.xyz → leg007_points.xyz
-│  │     └─ bridge_X_complete.xyz
-│  │
-│  ├─ segmented/         # Semantically segmented scans
-│  │  └─ bridge_X/
-│  │     ├─ approach_slab.xyz
-│  │     ├─ back_wall.xyz
-│  │     ├─ deck.xyz
-│  │     ├─ piers.xyz
-│  │     ├─ railings.xyz
-│  │     └─ wing_walls.xyz
-│  │
-│  ├─ npy/               # ML-ready format
-│  │  └─ bridge_X.npy (8192 points × 5 features)
-│  │
-│  └─ scanner_positions.json  # Scanner coordinates for each bridge
-│
-└─ bridge_summary.json   # All bridge parameters and metadata
+│  ├─ npy/bridge_X_8192.npy     # 8192 x 6 (xyz + 3 zero channels)
+│  ├─ scales.json               # normalisation radius per bridge
+│  └─ scanner_positions.json
+└─ annotations/
+   ├─ bridge_simple_descriptions.json
+   └─ bridge_complex_instructions.json
 ```
 
+## Bridge Geometry
+
+Each bridge belongs to one of four families:
+
+| family | spans | L/W (median) | clearance |
+| --- | --- | --- | --- |
+| `wide_crossing` | 1 | 0.7 | 3.5-6.0 m |
+| `minor_road` | 1 | 2.7 | 1.0-4.0 m |
+| `single_span_rq` | 1 | 2.1 | 3.0-5.5 m |
+| `multi_span_rq` | 2-5 | 4.2 | 4.5-6.5 m |
+
+Widths follow German road cross-sections (RQ9 to RQ36), plus footway and rural sections.
 
 ## Scanner Setup
 
-Each bridge is scanned from **8 strategically placed positions** for complete coverage:
+Each bridge is scanned from 8 positions. Heights are relative to the deck or the ground.
 
+- **Legs 1-2**: on the deck, at each side
+- **Legs 3-4**: on the approach road at each end
+- **Legs 5-6**: below the deck, on the bank
+- **Legs 7-8**: elevated, at each end
 
-- **Legs 0-1**: Left and right sides of the bridge
-- **Legs 2-3**: Front and back ends along the length
-- **Legs 4-5**: Below the bridge (underside coverage)
-- **Legs 6-7**: Above the bridge (top-down view)
+## Captions
 
-Scanner positions are automatically calculated based on bridge dimensions. Adjust offsets in `helios/config.py`:
+Fixed questions and templated answers, no LLM:
 
-```python
-WIDTH_OFFSET = 7   # Distance from bridge sides (meters)
-LENGTH_OFFSET = 25 # Distance from bridge ends (meters)
 ```
-
-## Bridge Types
-
-The pipeline generates two types of bridges:
-
-1. **Box Girder Bridges** - Hollow box cross-section, typically 2 cells across width
-2. **Beam-Slab Bridges** - Multiple beam columns with slab deck
-
-Both types include realistic variations in:
-- Number of spans (1-5)
-- Total length (35-160 meters)
-- Width (20.5-27.5 meters)
-- Pier configurations (single-column, multi-column, hammer-head)
-- Pier cross-sections (circular, rectangular)
-
-## Command Options
-
-### Master Pipeline (All-in-One)
-```bash
-python main.py --num-bridges N [OPTIONS]
-
-# Examples:
-python main.py --num-bridges 10 --include-components --run-simulation --semantic-segmentation
-python main.py --num-bridges 5 --bridge-type box_girder --run-simulation
-python main.py --num-bridges 3 --skip-simulation  # Models only
-
-Options:
-  --num-bridges N              Number of bridges to generate (required)
-  --bridge-type TYPE           box_girder or beam_slab (default: mixed)
-  --include-components         Generate separate component OBJ files
-  --run-simulation             Run HELIOS++ laser scanning
-  --semantic-segmentation      Segment point clouds by component
-  --skip-simulation            Generate models only, no scanning
-  --skip-npy-conversion        Skip NPY conversion step
+The total length of the bridge is 54.0 meters.
+The width of the bridge is 15.6 meters.
+The bridge has 4 spans.
+The piers are multicolumn piers.
 ```
-
 
 ## Acknowledgments
 
-This work builds upon open-source projects:
-
 - **[CadQuery](https://github.com/CadQuery/cadquery)** - Parametric 3D CAD modeling in Python
 - **[HELIOS++](https://github.com/3dgeo-heidelberg/helios)** - LiDAR simulation framework developed by 3DGeo Research Group, Heidelberg University
-
 
 ## Contact
 
@@ -170,4 +142,3 @@ For questions or collaboration:
 ## License
 
 MIT License
-
