@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Optional, List
 
 @dataclass
 class BridgeConfig:
@@ -21,11 +21,16 @@ class BridgeConfig:
     pier_cap_type: str
     pier_cross_section: str
     road_template: str
-    top_slab_thk: float = 0.25
     bridge_clearance_height: float = 5.0
-    bottom_slab_thk: float = 0.35
-    web_thk: float = 0.5
     deck_thickness: float = 0.3
     wing_wall_thickness: float = 0.5
     wing_wall_extension_m: float = 0.0
+    # Which real-bridge family this config was drawn from. Generator bookkeeping.
+    family: str = ""
+    # all spans from abutment to abutment
+    span_layout_m: List[float] = field(default_factory=list)
+    # "wingwall", "spill_through", "prismatic", or "" = pick from num_spans.
+    abutment_style: str = ""
+    # Horizontal : vertical run of the spill-through slope (real 1.5 - 2.5).
+    abutment_slope: float = 2.0
     

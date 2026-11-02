@@ -37,7 +37,7 @@ class BridgePipeline:
         # Track generated bridges
         self.bridge_metadata: List[BridgeConfig] = []
 
-    def generate_bridges(self, num_bridges: int, bridge_type: str, include_components: bool = False, seed: int | None = None) -> List[BridgeConfig]:
+    def generate_bridges(self, num_bridges: int, bridge_type: str, include_components: bool = False, seed: int | None = None, include_ground: bool = True) -> List[BridgeConfig]:
         """Create bridge configs and keep them in-memory."""
 
         # First we generate the bridge configs from config.py
@@ -55,7 +55,8 @@ class BridgePipeline:
             # Then we build the bridge model from geometry.bridge_model.py
             bridge_model = BridgeModel(config)
 
-            bridge = bridge_model.build_bridge(with_components=False) # this is building the bridge model from geometry.bridge_model.py
+            # no ground needed for the preview solid
+            bridge = bridge_model.build_bridge(with_components=False, include_ground=False)
             stl_file = self.bridge_objects_dir / f"{config.bridge_id}.stl"
             cq.exporters.export(bridge, str(stl_file))
             mesh = o3d.io.read_triangle_mesh(str(stl_file))
@@ -67,9 +68,13 @@ class BridgePipeline:
                 logger.info(f"Successfully saved bridge {config.bridge_id} to {obj_file}")
             
             if include_components:
-                components, bridge = bridge_model.build_bridge(with_components=True)
+                components, bridge = bridge_model.build_bridge(with_components=True, include_ground=include_ground)
                 os.makedirs(self.bridge_objects_dir / f"{config.bridge_id}", exist_ok=True) #making a directory for the bridge id
                 stl_file = self.bridge_objects_dir / f"{config.bridge_id}.stl"
+
+                # component order as HELIOS numbers them
+                with open(self.bridge_objects_dir / config.bridge_id / "components.json", "w") as f:
+                    json.dump({"order": sorted(components.keys())}, f, indent=2)
 
                 for name, component in components.items():
                     stl_file = self.bridge_objects_dir / f"{config.bridge_id}" / f"{name}.stl"

@@ -1,9 +1,13 @@
+import json
 import os
 import re
 import argparse
 import numpy as np
 from pathlib import Path
 import time
+
+# hitObjectId column in the HELIOS output
+HIT_OBJECT_COL = 8
 
 
 
@@ -42,30 +46,62 @@ def pc_norm(pc):
     xyz = xyz / m
 
     pc = np.concatenate((xyz, other_feature), axis=1)
-    return pc
+    return pc, centroid, float(m)
 
 
-def convert_bridge_data(input_file, output_dir, add_color_padding=False):
+def _record_scale(scales_path, bridge_id, norm_radius_m, centroid, n_points):
+    """Append this bridge's normalisation scale to scales.json."""
+    path = Path(scales_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    scales = {}
+    if path.is_file():
+        try:
+            scales = json.loads(path.read_text())
+        except json.JSONDecodeError:
+            scales = {}
+    scales[bridge_id] = {
+        "norm_radius_m": round(float(norm_radius_m), 4),
+        "centroid_m": [round(float(v), 4) for v in centroid],
+        "n_points": int(n_points),
+        "source": "convert_to_npy",
+    }
+    path.write_text(json.dumps(scales, indent=2, sort_keys=True))
+
+
+def convert_bridge_data(input_file, output_dir, add_color_padding=False,
+                        part_order=None, drop_components=("ground",),
+                        scales_path=None):
     """Convert bridge point cloud data from HELIOS output to .npy format.
+
     If add_color_padding is True, output is 6 channels with last 3 as 0,0,0 (shape Nx6).
+
+    part_order maps hitObjectId to component names; drop_components (ground) are removed.
     """
     input_file = Path(input_file)
     output_dir = Path(output_dir)
-    
-    
 
-    
-  
-        
     if not os.path.exists(input_file):
         print(f"Warning: {input_file} not found, skipping...")
         return
-        
+
     print(f"\nConverting {input_file}...")
     print(f"  Source: {input_file}")
     data = np.loadtxt(input_file, delimiter=' ')
     print(f"Shape: {data.shape}, Sample: {data[0][:5]}...")
-    
+
+    if part_order:
+        drop_ids = [i for i, name in enumerate(part_order) if name in drop_components]
+        if drop_ids and data.shape[1] > HIT_OBJECT_COL:
+            ids = data[:, HIT_OBJECT_COL].astype(int)
+            keep = ~np.isin(ids, drop_ids)
+            dropped = int((~keep).sum())
+            data = data[keep]
+            print(f"Dropped {dropped:,} points of {sorted(drop_components)}; "
+                  f"{len(data):,} structure points remain")
+            if len(data) < 64:
+                print(f"Warning: only {len(data)} structure points left, skipping...")
+                return
+
     # Handle different formats
     if data.shape[1] == 11:
         # HELIOS++ format: x y z intensity echo_width return_num num_returns classification gps_time full_wave_idx hitObjectId
@@ -105,16 +141,22 @@ def convert_bridge_data(input_file, output_dir, add_color_padding=False):
     
     # Normalize point cloud coordinates
     
-    point_cloud = pc_norm(point_cloud)
+    point_cloud, centroid, norm_radius_m = pc_norm(point_cloud)
     
     # Save as .npy file: bridge_<id>_8192.npy
     match = re.search(r"bridge_(\d+)", input_file.stem, re.IGNORECASE)
-    output_name = f"bridge_{match.group(1)}_8192.npy" if match else f"{input_file.stem}_8192.npy"
+    bridge_id = f"bridge_{match.group(1)}" if match else input_file.stem
+    output_name = f"{bridge_id}_8192.npy"
     output_file = os.path.join(output_dir, output_name)
     np.save(output_file, point_cloud.astype(np.float32))
-    
-    print(f"Saved {output_name} with shape {point_cloud.shape}")
-        
+
+    # save the scale of the sampled points
+    _record_scale(scales_path or (output_dir / "scales.json"),
+                  bridge_id, norm_radius_m, centroid, len(point_cloud))
+
+    print(f"Saved {output_name} with shape {point_cloud.shape} "
+          f"(norm radius {norm_radius_m:.3f} m)")
+
     print(f"Conversion complete. Files saved to {output_dir}")
 
 if __name__ == "__main__":

@@ -1,12 +1,9 @@
 """PointLLM bridge captions.
 
-L0 (scale_mode=none): questions are unmodified.
-L1 (scale_mode=prompt): every <point> human turn gets the PLAN_FOR_TRAINING.md
-sentence with the scan's pc_norm radius — not total_length_m:
+scale_mode=none: questions are unmodified.
+scale_mode=prompt: every <point> question gets the scan's normalisation radius:
 
     The scan was centered and divided by a radius of {m:.1f} metres.
-
-The LLM never sees that number in metadata, so it cannot copy it into answers.
 """
 import json, os, random, argparse, re
 from typing import Dict, Any, List, Optional, Tuple
@@ -22,13 +19,12 @@ FACT_RULES = (
     "If both appear, state them as separate facts.\n"
     "- num_spans is the count of spans; do not compute length from it.\n"
     "- bridge_type is only 'slab' or 'girder'. slab = flat soffit, no discrete "
-    "longitudinal members. girder = discrete beams/girders under the deck. "
-    "Never write box girder, beam-slab, box_girder, or beam_slab.\n"
+    "longitudinal members. girder = discrete beams/girders under the deck.\n"
     "- Piers: has_piers says whether supports exist between the abutments. "
     "number_of_piers_along_length = pier lines along the bridge; "
     "number_of_piers_across_width = columns in a line; total_piers = total columns. "
-    "Do not name pier styles (hammer-head, multicolumn, solid) or cross-sections "
-    "(circular, rectangular).\n"
+    "pier_type is multicolumn or wall; column_shape is cylindrical, rectangular "
+    "or trapezoidal. Name them only when the metadata carries them.\n"
     "- Do not invent materials (no concrete, steel, etc.).\n"
     "- Do not invent purpose, abutments, railings, or other parts unless they are in the metadata.\n"
     "- Use only numbers and categories from the metadata. If a field is missing, skip it.\n"
@@ -194,33 +190,20 @@ def build_complex_prompt(meta: Dict[str, Any]) -> str:
         f"BRIDGE METADATA:\n{json.dumps(meta_llm, indent=2, ensure_ascii=False)}"
     )
 
-DEFAULT_SYNTH_SUMMARY = (
-    "/media/syedsalman/salmandrive/SyntheticBridgeDatasetGeneration/"
-    "MultiModalDatasetBridges/Dataset/bridge_summary.json"
-)
-DEFAULT_SCANS_DIR = (
-    "/media/syedsalman/salmandrive/SyntheticBridgeDatasetGeneration/"
-    "MultiModalDatasetBridges/Dataset/PointCloudScans"
-)
-DEFAULT_REAL_DIR = "/media/syedsalman/salmandrive/Dataset/RealPointClouds/measurements/out"
-DEFAULT_OUTPUT = (
-    "/media/syedsalman/salmandrive/SyntheticBridgeDatasetGeneration/"
-    "MultiModalDatasetBridges/Dataset/annotations"
-)
-# PLAN_FOR_TRAINING.md §6 L1 — identical wording for synth and real.
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_SYNTH_SUMMARY = os.path.join(REPO_ROOT, "Dataset", "bridge_summary.json")
+DEFAULT_SCANS_DIR = os.path.join(REPO_ROOT, "Dataset", "PointCloudScans")
+DEFAULT_REAL_DIR = os.environ.get("REAL_BRIDGE_DIR")
+DEFAULT_OUTPUT = os.path.join(REPO_ROOT, "Dataset", "annotations")
+# Identical wording for synthetic and real bridges.
 SCALE_SENTENCE = (
     "The scan was centered and divided by a radius of {m:.1f} metres."
 )
 ENV_CANDIDATES = [
-    "/media/syedsalman/salmandrive/BridgeMLLM/.env",
+    os.path.join(REPO_ROOT, ".env"),
 ]
 
-# Mixed-training fields only — what a scan can show, same keys for real and synth.
-# CAD classes (box_girder, hammer_head, circular/rectangular) stay out.
-# `lanes` is deliberately absent: it is round((width - 2) / 3.5) on both the real
-# and synthetic sides, so it adds no information width does not already carry, and
-# putting it in a caption teaches the model to divide by 3.5. It stays in
-# parameters.json / bridge_summary.json as a cross-check (see pipeline._guess_lanes).
+# fields used in captions, same for real and synthetic (lanes left out)
 CAPTION_FIELDS = (
     "bridge_type",
     "num_spans",
@@ -233,10 +216,25 @@ CAPTION_FIELDS = (
     "number_of_piers_along_length",
     "number_of_piers_across_width",
     "total_piers",
+    "pier_type",
+    "column_shape",
 )
+# caption field -> possible key names in real and synthetic records
 CAPTION_ALIASES = {
     "depth_of_girder": ("depth_of_girder", "deck_structural_depth_m"),
-    "clearance_height_m": ("clearance_height_m", "bridge_clearance_height"),
+    "clearance_height_m": (
+        "clearance_height_m", "bridge_clearance_height", "bridge_clearance_height_m",
+    ),
+    # interior span
+    "span_m": ("span_m", "pier_span_m"),
+    "pier_type": ("pier_type", "type_of_piers"),
+    "column_shape": ("column_shape", "pier_cross_section"),
+    "number_of_piers_along_length": (
+        "number_of_piers_along_length", "number_of_piers_across_length",
+    ),
+    "number_of_piers_across_width": (
+        "number_of_piers_across_width", "piercolumns_across_width",
+    ),
 }
 
 # Generator / heuristic names → observable soffit class.
@@ -258,7 +256,7 @@ SELECTED_MODELS = ["openai/gpt-4o-mini", "openai/gpt-4o"]
 
 
 def load_env() -> None:
-    """Load OPENROUTER_API_KEY from BridgeMLLM/.env if it is not already set."""
+    """Load OPENROUTER_API_KEY from the repo's .env if it is not already set."""
     if os.getenv("OPENROUTER_API_KEY"):
         return
     for path in ENV_CANDIDATES:
@@ -313,14 +311,7 @@ GIRDER_SHARE_MIN = 0.30
 
 
 def caption_bridge_type(src: Dict[str, Any]) -> Optional[str]:
-    """slab vs girder from what the cloud can show, not CAD hollowness.
-
-    Real: a girder share above GIRDER_SHARE_MIN means discrete beams are really
-    there. A few stray girder-labelled points are not enough — japan_05 sits at
-    17% girder against 66% deck with a 0.22 m depth over a 12 m span, which is a
-    slab whose soffit got mislabelled, so it falls through to the measured type.
-    Synth: beam_slab and box_girder both → girder.
-    """
+    """slab or girder deck type."""
     meta = src.get("_meta") if isinstance(src.get("_meta"), dict) else {}
     counts = meta.get("class_counts") if isinstance(meta.get("class_counts"), dict) else {}
     structure = sum(int(v or 0) for k, v in counts.items() if k != "other")
@@ -350,8 +341,7 @@ def to_caption_meta(object_id: str, src: Dict[str, Any]) -> Dict[str, Any]:
         if value is None or value == []:
             continue
         if field == "clearance_height_m" and float(value) < 0:
-            # Negative clearance is a measurement diagnostic (ground sits above
-            # the soffit — MEASUREMENTS.md §11), not a bridge dimension.
+            # Negative clearance is a measurement artefact, not a bridge dimension.
             continue
         meta[field] = _round(value, field)
     if mapped_type is not None:
@@ -369,106 +359,120 @@ def meta_from_real(bridge_id: str, params: Dict[str, Any]) -> Dict[str, Any]:
     return to_caption_meta(bridge_id, params)
 
 
+# fixed caption sentences and questions
+RATIO_EVAL_QUESTION = "What does this cloud represent in its entirety?"
+
+Q_SIMPLE = "Provide a short description of this 3D structure."
+Q_LENGTH = "What is the total length of the bridge?"
+Q_WIDTH = "What is the width of the bridge?"
+Q_SPAN = "What is the span length of the bridge?"
+Q_NUM_SPANS = "How many spans does the bridge have?"
+Q_PIERS = "How many piers does the bridge have?"
+Q_PIER_TYPE = "What type of piers does the bridge have?"
+Q_DIMENSIONS = "Can you describe the overall dimensions of the bridge?"
+
+
+def _m(value: Any) -> str:
+    """One decimal, always 'meters'."""
+    return f"{float(value):.1f} meters"
+
+
+def _n(value: Any) -> int:
+    return int(round(float(value)))
+
+
+def _sentences(meta: Dict[str, Any]) -> Dict[str, str]:
+    """The canonical sentence for each quantity this bridge actually has."""
+    out: Dict[str, str] = {}
+    btype = meta.get("bridge_type")
+    if btype in ("slab", "girder"):
+        out["type"] = f"This is a {btype} bridge."
+    if meta.get("total_length_m") is not None:
+        out["length"] = f"The total length of the bridge is {_m(meta['total_length_m'])}."
+    if meta.get("width_m") is not None:
+        out["width"] = f"The width of the bridge is {_m(meta['width_m'])}."
+    if meta.get("span_m") is not None:
+        out["span"] = f"The span length of the bridge is {_m(meta['span_m'])}."
+    # Plural agreement is the one thing allowed to vary.
+    if meta.get("num_spans") is not None:
+        n = _n(meta["num_spans"])
+        out["num_spans"] = f"The bridge has {n} span{'' if n == 1 else 's'}."
+    piers = _n(meta.get("total_piers") or 0)
+    out["piers"] = f"The bridge has {piers} pier{'' if piers == 1 else 's'}."
+    if piers:
+        if meta.get("pier_type"):
+            out["pier_type"] = f"The piers are {meta['pier_type']} piers."
+        if meta.get("column_shape"):
+            out["column_shape"] = f"The pier columns are {meta['column_shape']} in shape."
+        if meta.get("number_of_piers_along_length") is not None:
+            rows = _n(meta["number_of_piers_along_length"])
+            out["pier_rows"] = f"The bridge has {rows} row{'' if rows == 1 else 's'} of piers."
+        if meta.get("number_of_piers_across_width") is not None:
+            cols = _n(meta["number_of_piers_across_width"])
+            out["pier_columns"] = f"Each row has {cols} column{'' if cols == 1 else 's'}."
+    if meta.get("clearance_height_m") is not None:
+        out["clearance"] = (
+            f"The clearance height of the bridge is {_m(meta['clearance_height_m'])}."
+        )
+    return out
+
+
+def _qa(object_id: str, ctype: str, turns: List[Tuple[str, str]]) -> Dict[str, Any]:
+    convs: List[Dict[str, str]] = []
+    for i, (q, a) in enumerate(turns):
+        convs.append({"from": "human", "value": (f"<point>\n{q}" if i == 0 else q)})
+        convs.append({"from": "gpt", "value": a})
+    return {"object_id": object_id, "conversation_type": ctype, "conversations": convs}
+
+
 def template_caption_records(
     meta: Dict[str, Any], radius_m: Optional[float] = None
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
-    """Deterministic captions that always state length, width, and pier count (0 if none)."""
+    """Templated captions with fixed questions and answers, no LLM."""
     bid = str(meta["id"])
-    length = meta.get("total_length_m")
-    width = meta.get("width_m")
-    span = meta.get("span_m")
-    n_span = int(meta.get("num_spans") or 1)
-    piers = int(meta.get("total_piers") or 0)
-    btype = meta.get("bridge_type") or "slab"
-    span_txt = (
-        f"{n_span} span of {span} m" if n_span == 1 else f"{n_span} spans of {span} m each"
-    )
-    pier_txt = f"{piers} piers" if piers else "0 piers"
-    type_txt = "slab" if btype == "slab" else "girder"
+    s = _sentences(meta)
 
-    simple_answer = (
-        f"This point cloud is a 3D representation of a {type_txt} bridge with a total length of "
-        f"{length} m and a width of {width} m. It has {span_txt} and {pier_txt}."
-    )
-    detailed_answer = (
-        f"The scan shows a {type_txt} bridge. Total length is {length} m and width is {width} m. "
-        f"The structure has {span_txt}. Number of piers is {piers}."
-    )
-    simple = {
-        "object_id": bid,
-        "conversation_type": "simple_description",
-        "conversations": [
-            {
-                "from": "human",
-                "value": "<point>\nProvide a short explanation of this 3D structure.",
-            },
-            {"from": "gpt", "value": simple_answer},
-        ],
-    }
+    def joined(keys: Tuple[str, ...]) -> str:
+        return " ".join(s[k] for k in keys if k in s)
+
+    simple = _qa(bid, "simple_description", [(
+        Q_SIMPLE,
+        joined(("type", "length", "width", "num_spans", "piers")),
+    )])
+
     complex_records = [
-        {
-            "object_id": bid,
-            "conversation_type": "detailed_description",
-            "conversations": [
-                {
-                    "from": "human",
-                    "value": "<point>\nCan you describe this in more detail?",
-                },
-                {"from": "gpt", "value": detailed_answer},
-            ],
-        },
-        {
-            "object_id": bid,
-            "conversation_type": "single_round",
-            "conversations": [
-                {
-                    "from": "human",
-                    "value": "<point>\nWhat is the total length of the bridge?",
-                },
-                {"from": "gpt", "value": f"The total length of the bridge is {length} m."},
-            ],
-        },
-        {
-            "object_id": bid,
-            "conversation_type": "single_round",
-            "conversations": [
-                {
-                    "from": "human",
-                    "value": "<point>\nHow wide is the bridge?",
-                },
-                {"from": "gpt", "value": f"The width of the bridge is {width} m."},
-            ],
-        },
-        {
-            "object_id": bid,
-            "conversation_type": "single_round",
-            "conversations": [
-                {
-                    "from": "human",
-                    "value": "<point>\nHow many piers does the bridge have?",
-                },
-                {"from": "gpt", "value": f"The bridge has {pier_txt}."},
-            ],
-        },
-        {
-            "object_id": bid,
-            "conversation_type": "multi_round",
-            "conversations": [
-                {
-                    "from": "human",
-                    "value": "<point>\nCan you describe the overall dimensions of the bridge?",
-                },
-                {
-                    "from": "gpt",
-                    "value": f"The bridge has a total length of {length} m and a width of {width} m.",
-                },
-                {"from": "human", "value": "How many piers support it?"},
-                {"from": "gpt", "value": f"It has {pier_txt}."},
-                {"from": "human", "value": "What is the span layout?"},
-                {"from": "gpt", "value": f"It has {span_txt}."},
-            ],
-        },
+        _qa(bid, "detailed_description", [(
+            RATIO_EVAL_QUESTION,
+            joined((
+                "type", "length", "width", "span", "num_spans", "piers",
+                "pier_type", "column_shape", "pier_rows", "pier_columns",
+                "clearance",
+            )),
+        )]),
     ]
+
+    for question, key in (
+        (Q_LENGTH, "length"),
+        (Q_WIDTH, "width"),
+        (Q_SPAN, "span"),
+        (Q_NUM_SPANS, "num_spans"),
+        (Q_PIERS, "piers"),
+    ):
+        if key in s:
+            complex_records.append(_qa(bid, "single_round", [(question, s[key])]))
+
+    if "pier_type" in s:
+        complex_records.append(_qa(bid, "single_round", [(
+            Q_PIER_TYPE, joined(("pier_type", "column_shape")),
+        )]))
+
+    multi: List[Tuple[str, str]] = [(Q_DIMENSIONS, joined(("length", "width")))]
+    if "piers" in s:
+        multi.append((Q_PIERS, joined(("piers", "pier_type", "column_shape"))))
+    if "num_spans" in s:
+        multi.append((Q_NUM_SPANS, joined(("num_spans", "span"))))
+    complex_records.append(_qa(bid, "multi_round", multi))
+
     if radius_m is not None:
         simple = apply_scale_to_record(simple, float(radius_m), "both")
         complex_records = [
@@ -477,18 +481,46 @@ def template_caption_records(
     return simple, complex_records
 
 
+def real_record(measurements_dir: str, bridge_id: str) -> Optional[Dict[str, Any]]:
+    """One real bridge from primary_parameter.json (depth from parameters.json)."""
+    folder = os.path.join(measurements_dir, bridge_id)
+    hand_path = os.path.join(folder, "primary_parameter.json")
+    if not os.path.isfile(hand_path):
+        return None
+    with open(hand_path, encoding="utf-8") as f:
+        hand = json.load(f)
+
+    src: Dict[str, Any] = dict(hand)
+
+    # girder: true marks a T-beam deck
+    src["bridge_type"] = "girder" if hand.get("girder") else "slab"
+
+    # total piers from the layout
+    lines = hand.get("number_of_piers_across_length") or 0
+    across = hand.get("piercolumns_across_width")
+    src["total_piers"] = lines if hand.get("type_of_piers") == "wall" else lines * (across or 0)
+
+    measured_path = os.path.join(folder, "parameters.json")
+    if os.path.isfile(measured_path):
+        with open(measured_path, encoding="utf-8") as f:
+            measured = json.load(f)
+        if measured.get("deck_structural_depth_m") is not None:
+            src.setdefault("deck_structural_depth_m", measured["deck_structural_depth_m"])
+
+    return meta_from_real(bridge_id, src)
+
+
 def load_real_bridges(measurements_dir: str) -> List[Dict[str, Any]]:
-    """Load Tier A/B metadata from measurements/out/<id>/parameters.json."""
-    records = []
+    """Every real bridge that carries a hand annotation."""
     if not os.path.isdir(measurements_dir):
         raise FileNotFoundError(f"Real measurements dir not found: {measurements_dir}")
+    records = []
     for name in sorted(os.listdir(measurements_dir)):
-        path = os.path.join(measurements_dir, name, "parameters.json")
-        if not os.path.isfile(path):
+        if not os.path.isdir(os.path.join(measurements_dir, name)):
             continue
-        with open(path, encoding="utf-8") as f:
-            params = json.load(f)
-        records.append(meta_from_real(name, params))
+        rec = real_record(measurements_dir, name)
+        if rec is not None:
+            records.append(rec)
     return records
 
 
@@ -977,6 +1009,9 @@ if __name__ == "__main__":
             synth_rows = json.load(f)
         metas.extend(meta_from_synthetic(row) for row in synth_rows)
     if args.source in ("real", "all"):
+        if not args.real_dir or not os.path.isdir(args.real_dir):
+            print("Error: --source real/all needs --real-dir (or REAL_BRIDGE_DIR)")
+            raise SystemExit(1)
         metas.extend(load_real_bridges(args.real_dir))
 
     if args.ids:

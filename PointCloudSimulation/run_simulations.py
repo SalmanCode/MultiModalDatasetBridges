@@ -8,7 +8,7 @@ from collections import defaultdict
 from .scanner_positions import calculate_scanner_positions
 from .create_survey_xml import create_survey_xml
 from .create_scene_xml import create_scene_xml
-from .semantic_segmentation import semantic_segmentation
+from .semantic_segmentation import semantic_segmentation, component_names_for
 from .convert_to_npy import convert_bridge_data
 
 
@@ -49,6 +49,7 @@ def pointcloud_complete_pipeline(
     convert_to_npy=False,
     npy_only=False,
     skip_existing=False,
+    keep_meshes=False,
 ):
     """Main pipeline to generate point cloud complete dataset.
     This pipeline will generate the point cloud complete dataset including the raw point clouds, segmented point clouds, and merged point clouds.
@@ -59,6 +60,7 @@ def pointcloud_complete_pipeline(
         run_segmentation: If True, run semantic segmentation after simulations
         convert_to_npy: If True, convert the point clouds to NPY format
         npy_only: If True, after npy delete XYZ + mesh for that bridge (keep npy/summary)
+        keep_meshes: With npy_only, delete only the XYZ and keep the meshes
         skip_existing: If True, skip bridges that already have an npy; reuse merged XYZ
             when HELIOS already finished but npy conversion did not.
     """
@@ -164,6 +166,10 @@ def pointcloud_complete_pipeline(
                 and merged_output_file.is_file()
                 and merged_output_file.stat().st_size > 0
             )
+            # component order, used to drop ground points
+            names = component_names_for(bridge_models_dir / bridge_id)
+            part_order = [names[i] for i in sorted(names)]
+
             if reuse_merged:
                 print(f"  Reusing existing merged scan: {merged_output_file}")
                 if convert_to_npy:
@@ -171,7 +177,9 @@ def pointcloud_complete_pipeline(
                     print(f"Converting point clouds to NPY format...")
                     print(f"{'='*70}\n")
                     npy_output_dir.mkdir(parents=True, exist_ok=True)
-                    convert_bridge_data(merged_output_file, npy_output_dir, add_color_padding=True)
+                    convert_bridge_data(merged_output_file, npy_output_dir,
+                                        add_color_padding=True, part_order=part_order,
+                                        scales_path=scan_output_dir / "scales.json")
                 print(f"Completed {bridge_id}\n")
                 continue
 
@@ -231,7 +239,8 @@ def pointcloud_complete_pipeline(
                     segmented_output_dir.mkdir(parents=True, exist_ok=True)
                     segmented_bridge_dir = segmented_output_dir / f"TLS_{bridge_id}"
                     os.makedirs(segmented_bridge_dir, exist_ok=True)
-                    semantic_segmentation(component_files, segmented_bridge_dir)
+                    semantic_segmentation(component_files, segmented_bridge_dir,
+                                          component_names_for(bridge_models_dir / bridge_id))
                     print(f"  ✓ Semantic segmentation completed")
                 else:
                     print(f"No semantic segmentation requested")
@@ -242,7 +251,9 @@ def pointcloud_complete_pipeline(
                     print(f"{'='*70}\n")
 
                     npy_output_dir.mkdir(parents=True, exist_ok=True)
-                    convert_bridge_data(merged_output_file, npy_output_dir, add_color_padding=True)
+                    convert_bridge_data(merged_output_file, npy_output_dir,
+                                        add_color_padding=True, part_order=part_order,
+                                        scales_path=scan_output_dir / "scales.json")
 
                     if npy_only:
                         _cleanup_bridge_xyz(
@@ -250,7 +261,7 @@ def pointcloud_complete_pipeline(
                             scan_legs_output_dir,
                             merged_output_dir,
                             segmented_output_dir,
-                            bridge_models_dir=bridge_models_dir,
+                            bridge_models_dir=None if keep_meshes else bridge_models_dir,
                         )
                 elif npy_only:
                     print(

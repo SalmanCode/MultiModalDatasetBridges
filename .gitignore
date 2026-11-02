@@ -30,3 +30,6 @@ Thumbs.db
 .coverage
 htmlcov/
 
+
+# Secrets
+.env
