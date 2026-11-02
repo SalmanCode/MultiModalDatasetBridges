@@ -59,6 +59,7 @@ def run_helios_simulation(
     run_segmentation=False,
     npy_conversion=False,
     npy_only=False,
+    skip_existing=False,
 ):
     """Step 2: Runing HELIOS++ simulation to generate point clouds"""
     print(f"\n{'='*70}")
@@ -73,6 +74,7 @@ def run_helios_simulation(
             run_segmentation=run_segmentation,
             convert_to_npy=npy_conversion,
             npy_only=npy_only,
+            skip_existing=skip_existing,
         )
         print(f"\nSuccessfully completed simulation pipeline")
         end_time = time.time()
@@ -174,6 +176,8 @@ Examples:
                         help='Convert point clouds to NPY format')
     parser.add_argument('--npy-only', action='store_true',
                         help='After npy: delete XYZ + mesh per bridge; keep npy + bridge_summary only')
+    parser.add_argument('--resume', '--skip-existing', dest='resume', action='store_true',
+                        help='Do not regenerate CAD/summary; skip bridges that already have npy')
     
     args = parser.parse_args()
     
@@ -204,13 +208,16 @@ Examples:
     print(f"  • Semantic segmentation: {args.semantic_segmentation}")
     print(f"  • Convert to NPY: {args.npy_conversion}")
     print(f"  • NPY only (delete XYZ + mesh): {args.npy_only}")
+    print(f"  • Resume / skip existing npy: {args.resume}")
     print()
     
     # Execute pipeline
     success = True
     
-    # Step 1: Generate bridges
-    if not generate_bridges(args.num_bridges, args.bridge_type, args.include_components):
+    # Step 1: Generate bridges (skip on resume — that would overwrite bridge_summary.json)
+    if args.resume:
+        print("Resume: skipping CAD generation; using existing Dataset/bridge_summary.json")
+    elif not generate_bridges(args.num_bridges, args.bridge_type, args.include_components):
         print("\n❌ Pipeline failed at bridge generation step")
         sys.exit(1)
     
@@ -222,6 +229,7 @@ Examples:
             args.semantic_segmentation,
             args.npy_conversion,
             args.npy_only,
+            skip_existing=args.resume,
         ):
             print("\n❌ Pipeline failed at HELIOS simulation step")
             sys.exit(1)

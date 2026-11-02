@@ -1,5 +1,16 @@
-import json, os, random, argparse
+"""PointLLM bridge captions.
+
+L0 (scale_mode=none): questions are unmodified.
+L1 (scale_mode=prompt): every <point> human turn gets the PLAN_FOR_TRAINING.md
+sentence with the scan's pc_norm radius — not total_length_m:
+
+    The scan was centered and divided by a radius of {m:.1f} metres.
+
+The LLM never sees that number in metadata, so it cannot copy it into answers.
+"""
+import json, os, random, argparse, re
 from typing import Dict, Any, List, Optional, Tuple
+import numpy as np
 import requests
 
 FACT_RULES = (
@@ -22,7 +33,9 @@ FACT_RULES = (
     "- Do not invent purpose, abutments, railings, or other parts unless they are in the metadata.\n"
     "- Use only numbers and categories from the metadata. If a field is missing, skip it.\n"
     "- Lengths are already rounded to 0.1 m. Copy them as written "
-    "(13.6 not 13.60; 5.2 not 5.237). Whole metres have no decimal (30 not 30.0).\n"
+    "(13.6 not 13.60; 5.2 not 5.237; 30.0 not 30).\n"
+    "- Do not mention a normalization radius, unit sphere, or scan scaling. "
+    "Those are added to the question separately and are not bridge dimensions.\n"
 )
 
 
@@ -183,23 +196,37 @@ def build_complex_prompt(meta: Dict[str, Any]) -> str:
 
 DEFAULT_SYNTH_SUMMARY = (
     "/media/syedsalman/salmandrive/SyntheticBridgeDatasetGeneration/"
-    "MultiModalDatasetBridges/Dataset_23.7.26/bridge_summary.json"
+    "MultiModalDatasetBridges/Dataset/bridge_summary.json"
+)
+DEFAULT_SCANS_DIR = (
+    "/media/syedsalman/salmandrive/SyntheticBridgeDatasetGeneration/"
+    "MultiModalDatasetBridges/Dataset/PointCloudScans"
 )
 DEFAULT_REAL_DIR = "/media/syedsalman/salmandrive/Dataset/RealPointClouds/measurements/out"
-DEFAULT_OUTPUT = "/media/syedsalman/salmandrive/Dataset/MixedPointCloudv2/annotations"
+DEFAULT_OUTPUT = (
+    "/media/syedsalman/salmandrive/SyntheticBridgeDatasetGeneration/"
+    "MultiModalDatasetBridges/Dataset/annotations"
+)
+# PLAN_FOR_TRAINING.md §6 L1 — identical wording for synth and real.
+SCALE_SENTENCE = (
+    "The scan was centered and divided by a radius of {m:.1f} metres."
+)
 ENV_CANDIDATES = [
     "/media/syedsalman/salmandrive/BridgeMLLM/.env",
 ]
 
 # Mixed-training fields only — what a scan can show, same keys for real and synth.
 # CAD classes (box_girder, hammer_head, circular/rectangular) stay out.
+# `lanes` is deliberately absent: it is round((width - 2) / 3.5) on both the real
+# and synthetic sides, so it adds no information width does not already carry, and
+# putting it in a caption teaches the model to divide by 3.5. It stays in
+# parameters.json / bridge_summary.json as a cross-check (see pipeline._guess_lanes).
 CAPTION_FIELDS = (
     "bridge_type",
     "num_spans",
     "span_m",
     "total_length_m",
     "width_m",
-    "lanes",
     "depth_of_girder",
     "clearance_height_m",
     "has_piers",
@@ -271,8 +298,7 @@ def _round(value: Any, field: Optional[str] = None) -> Any:
         except (TypeError, ValueError):
             return value
     if isinstance(value, (int, float)):
-        rounded = round(float(value), 1)
-        return int(rounded) if rounded == int(rounded) else rounded
+        return round(float(value), 1)
     return value
 
 
@@ -323,6 +349,10 @@ def to_caption_meta(object_id: str, src: Dict[str, Any]) -> Dict[str, Any]:
         value = _pick(src, field)
         if value is None or value == []:
             continue
+        if field == "clearance_height_m" and float(value) < 0:
+            # Negative clearance is a measurement diagnostic (ground sits above
+            # the soffit — MEASUREMENTS.md §11), not a bridge dimension.
+            continue
         meta[field] = _round(value, field)
     if mapped_type is not None:
         meta["bridge_type"] = mapped_type
@@ -330,13 +360,121 @@ def to_caption_meta(object_id: str, src: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def meta_from_synthetic(bridge_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Map Dataset_23.7.26 bridge_summary.json rows to caption metadata."""
+    """Map Dataset/bridge_summary.json rows to caption metadata."""
     return to_caption_meta(str(bridge_data.get("bridge_id")), bridge_data)
 
 
 def meta_from_real(bridge_id: str, params: Dict[str, Any]) -> Dict[str, Any]:
     """Map BridgeBank measurements/out/<id>/parameters.json to the same fields."""
     return to_caption_meta(bridge_id, params)
+
+
+def template_caption_records(
+    meta: Dict[str, Any], radius_m: Optional[float] = None
+) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    """Deterministic captions that always state length, width, and pier count (0 if none)."""
+    bid = str(meta["id"])
+    length = meta.get("total_length_m")
+    width = meta.get("width_m")
+    span = meta.get("span_m")
+    n_span = int(meta.get("num_spans") or 1)
+    piers = int(meta.get("total_piers") or 0)
+    btype = meta.get("bridge_type") or "slab"
+    span_txt = (
+        f"{n_span} span of {span} m" if n_span == 1 else f"{n_span} spans of {span} m each"
+    )
+    pier_txt = f"{piers} piers" if piers else "0 piers"
+    type_txt = "slab" if btype == "slab" else "girder"
+
+    simple_answer = (
+        f"This point cloud is a 3D representation of a {type_txt} bridge with a total length of "
+        f"{length} m and a width of {width} m. It has {span_txt} and {pier_txt}."
+    )
+    detailed_answer = (
+        f"The scan shows a {type_txt} bridge. Total length is {length} m and width is {width} m. "
+        f"The structure has {span_txt}. Number of piers is {piers}."
+    )
+    simple = {
+        "object_id": bid,
+        "conversation_type": "simple_description",
+        "conversations": [
+            {
+                "from": "human",
+                "value": "<point>\nProvide a short explanation of this 3D structure.",
+            },
+            {"from": "gpt", "value": simple_answer},
+        ],
+    }
+    complex_records = [
+        {
+            "object_id": bid,
+            "conversation_type": "detailed_description",
+            "conversations": [
+                {
+                    "from": "human",
+                    "value": "<point>\nCan you describe this in more detail?",
+                },
+                {"from": "gpt", "value": detailed_answer},
+            ],
+        },
+        {
+            "object_id": bid,
+            "conversation_type": "single_round",
+            "conversations": [
+                {
+                    "from": "human",
+                    "value": "<point>\nWhat is the total length of the bridge?",
+                },
+                {"from": "gpt", "value": f"The total length of the bridge is {length} m."},
+            ],
+        },
+        {
+            "object_id": bid,
+            "conversation_type": "single_round",
+            "conversations": [
+                {
+                    "from": "human",
+                    "value": "<point>\nHow wide is the bridge?",
+                },
+                {"from": "gpt", "value": f"The width of the bridge is {width} m."},
+            ],
+        },
+        {
+            "object_id": bid,
+            "conversation_type": "single_round",
+            "conversations": [
+                {
+                    "from": "human",
+                    "value": "<point>\nHow many piers does the bridge have?",
+                },
+                {"from": "gpt", "value": f"The bridge has {pier_txt}."},
+            ],
+        },
+        {
+            "object_id": bid,
+            "conversation_type": "multi_round",
+            "conversations": [
+                {
+                    "from": "human",
+                    "value": "<point>\nCan you describe the overall dimensions of the bridge?",
+                },
+                {
+                    "from": "gpt",
+                    "value": f"The bridge has a total length of {length} m and a width of {width} m.",
+                },
+                {"from": "human", "value": "How many piers support it?"},
+                {"from": "gpt", "value": f"It has {pier_txt}."},
+                {"from": "human", "value": "What is the span layout?"},
+                {"from": "gpt", "value": f"It has {span_txt}."},
+            ],
+        },
+    ]
+    if radius_m is not None:
+        simple = apply_scale_to_record(simple, float(radius_m), "both")
+        complex_records = [
+            apply_scale_to_record(rec, float(radius_m), "both") for rec in complex_records
+        ]
+    return simple, complex_records
 
 
 def load_real_bridges(measurements_dir: str) -> List[Dict[str, Any]]:
@@ -352,6 +490,156 @@ def load_real_bridges(measurements_dir: str) -> List[Dict[str, Any]]:
             params = json.load(f)
         records.append(meta_from_real(name, params))
     return records
+
+
+def _merged_xyz_path(scans_dir: str, object_id: str) -> Optional[str]:
+    """PointCloudScans/merged/TLS_<id>/<id>_complete.xyz"""
+    if not scans_dir:
+        return None
+    path = os.path.join(scans_dir, "merged", f"TLS_{object_id}", f"{object_id}_complete.xyz")
+    return path if os.path.isfile(path) else None
+
+
+def pc_norm_radius(xyz: np.ndarray) -> Tuple[float, List[float]]:
+    """Same radius convert_to_npy.pc_norm divides by: centroid, then max ||p||."""
+    centroid = xyz.mean(axis=0)
+    radius = float(np.max(np.linalg.norm(xyz - centroid, axis=1)))
+    return max(radius, 1e-6), [float(v) for v in centroid]
+
+
+def compute_norm_radius_from_xyz(xyz_path: str) -> Tuple[float, List[float]]:
+    """Load metric XYZ (HELIOS x y z ...) and return (norm_radius_m, centroid_m)."""
+    xyz = np.loadtxt(xyz_path, usecols=(0, 1, 2), dtype=np.float64)
+    if xyz.ndim == 1:
+        xyz = xyz.reshape(1, 3)
+    if xyz.size == 0:
+        raise ValueError(f"No points in {xyz_path}")
+    return pc_norm_radius(xyz)
+
+
+def load_scales_json(path: str) -> Dict[str, Dict[str, Any]]:
+    if not path or not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError:
+        return {}
+    if isinstance(data, dict):
+        return data
+    return {}
+
+
+def save_scales_json(path: str, scales: Dict[str, Dict[str, Any]]) -> None:
+    os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+    tmp = f"{path}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(scales, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, path)
+
+
+def collect_scales(
+    object_ids: List[str],
+    scans_dir: Optional[str],
+    real_dir: Optional[str],
+    cache_paths: List[str],
+) -> Dict[str, Dict[str, Any]]:
+    """norm_radius_m per object: cache → real parameters.json → merged XYZ."""
+    scales: Dict[str, Dict[str, Any]] = {}
+    for path in cache_paths:
+        scales.update(load_scales_json(path))
+
+    # A real bridge's radius always comes from its parameters.json, cache or no
+    # cache. The cache exists to avoid re-reading multi-GB merged .xyz scans for
+    # the synthetic side; re-reading 21 small JSON files costs nothing. Letting a
+    # stale cache win here is how a corrected measurement would silently fail to
+    # reach the captions -- which is exactly what would have happened after the
+    # ground-included norm_radius_m fix.
+    n_refreshed = 0
+    if real_dir:
+        for object_id in object_ids:
+            params_path = os.path.join(real_dir, object_id, "parameters.json")
+            if not os.path.isfile(params_path):
+                continue
+            with open(params_path, encoding="utf-8") as f:
+                params = json.load(f)
+            radius = params.get("norm_radius_m")
+            if radius is None:
+                continue
+            cached = (scales.get(object_id) or {}).get("norm_radius_m")
+            if cached is not None and abs(float(cached) - float(radius)) > 1e-6:
+                print(f"  {object_id}: cached norm_radius_m {float(cached):.3f} m is stale, "
+                      f"using {float(radius):.3f} m from parameters.json")
+                n_refreshed += 1
+            scales[object_id] = {
+                "norm_radius_m": float(radius),
+                "centroid_m": params.get("centroid_m"),
+                "norm_basis": params.get("norm_basis"),
+                "source": "parameters.json",
+            }
+    if n_refreshed:
+        print(f"Refreshed {n_refreshed} stale real radius/radii from parameters.json")
+
+    missing = [oid for oid in object_ids if oid not in scales or scales[oid].get("norm_radius_m") is None]
+    n_compute = 0
+    for object_id in missing:
+        record: Optional[Dict[str, Any]] = None
+        if record is None and scans_dir:
+            xyz_path = _merged_xyz_path(scans_dir, object_id)
+            if xyz_path:
+                print(f"Computing norm_radius_m from {xyz_path} ...")
+                radius, centroid = compute_norm_radius_from_xyz(xyz_path)
+                record = {
+                    "norm_radius_m": radius,
+                    "centroid_m": centroid,
+                    "source": xyz_path,
+                }
+                n_compute += 1
+        if record is not None:
+            scales[object_id] = record
+
+    if n_compute:
+        print(f"Computed norm_radius_m from {n_compute} merged XYZ scan(s)")
+    return scales
+
+
+def scale_sentence(radius_m: float) -> str:
+    return SCALE_SENTENCE.format(m=float(radius_m))
+
+
+def inject_scale_sentence(text: str, radius_m: float) -> str:
+    """Insert the L1 sentence after <point>\\n. Idempotent. Leaves answers alone."""
+    if not text or radius_m is None:
+        return text
+    sentence = scale_sentence(radius_m)
+    if sentence in text:
+        return text
+    match = re.match(r"^(<point>\s*)", text)
+    if not match:
+        return text
+    rest = text[match.end():]
+    if rest.startswith(sentence):
+        return text
+    spacer = "" if rest.startswith("\n") else " "
+    return f"{match.group(1)}{sentence}{spacer}{rest}"
+
+
+def apply_scale_to_record(
+    record: Dict[str, Any],
+    radius_m: float,
+    apply_to: str,
+) -> Dict[str, Any]:
+    """Prefix human <point> turns. apply_to: both | complex | simple."""
+    conv_type = record.get("conversation_type")
+    if apply_to == "simple" and conv_type != "simple_description":
+        return record
+    if apply_to == "complex" and conv_type == "simple_description":
+        return record
+    for turn in record.get("conversations") or []:
+        if turn.get("from") != "human":
+            continue
+        turn["value"] = inject_scale_sentence(str(turn.get("value", "")), radius_m)
+    return record
 
 
 # === OpenRouter API Call ===
@@ -587,14 +875,23 @@ def generate_complex_instructions(meta: Dict[str, Any]) -> List[Dict[str, Any]]:
 # === Entry point ===
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Generate simple descriptions and complex instructions for bridge point clouds"
+        description=(
+            "Generate PointLLM captions for synthetic/real bridges. "
+            "scale_mode=prompt adds the L1 radius sentence to human <point> turns."
+        )
     )
     parser.add_argument(
         "--input",
         "-i",
         type=str,
         default=DEFAULT_SYNTH_SUMMARY,
-        help="Synthetic bridge_summary.json (default: Dataset_23.7.26)",
+        help="Synthetic bridge_summary.json (default: Dataset/bridge_summary.json)",
+    )
+    parser.add_argument(
+        "--scans-dir",
+        type=str,
+        default=DEFAULT_SCANS_DIR,
+        help="PointCloudScans folder with merged/TLS_<id>/<id>_complete.xyz",
     )
     parser.add_argument(
         "--real-dir",
@@ -605,22 +902,45 @@ if __name__ == "__main__":
     parser.add_argument(
         "--source",
         choices=["synthetic", "real", "all"],
-        default="all",
-        help="Which bridges to caption (default: all = synth + real)",
+        default="synthetic",
+        help="Which bridges to caption (default: synthetic)",
     )
     parser.add_argument(
         "--count",
         "-c",
         type=int,
         default=None,
-        help="Number of bridges to process (default: all)",
+        help="Number of bridges to process (default: all with a known scale)",
+    )
+    parser.add_argument(
+        "--ids",
+        type=str,
+        default=None,
+        help="Comma-separated object ids to process (e.g. bridge_1,bridge_2)",
     )
     parser.add_argument(
         "--output",
         "-o",
         type=str,
         default=DEFAULT_OUTPUT,
-        help="Output directory for the two annotation JSON files",
+        help="Output directory for annotation JSON + scales.json",
+    )
+    parser.add_argument(
+        "--scale-mode",
+        choices=["none", "prompt"],
+        default="prompt",
+        help="none = L0 captions; prompt = L1 radius sentence in questions (default)",
+    )
+    parser.add_argument(
+        "--apply-scale-to",
+        choices=["both", "complex", "simple"],
+        default="both",
+        help="Which files get the L1 sentence (default: both). Use complex for Stage-2-only L1.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print metadata + radius + example L1 question; do not call the LLM",
     )
     parser.add_argument(
         "--model",
@@ -632,6 +952,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Discard existing annotations instead of resuming from them",
     )
+    parser.add_argument(
+        "--template",
+        action="store_true",
+        help="Write deterministic captions (length, width, pier count) instead of calling the LLM",
+    )
     args = parser.parse_args()
 
     SELECTED_MODELS[:] = [args.model] + [m for m in SELECTED_MODELS if m != args.model]
@@ -640,6 +965,8 @@ if __name__ == "__main__":
     os.makedirs(out_dir, exist_ok=True)
     simple_output = os.path.join(out_dir, "bridge_simple_descriptions.json")
     complex_output = os.path.join(out_dir, "bridge_complex_instructions.json")
+    scales_output = os.path.join(out_dir, "scales.json")
+    scans_scales = os.path.join(os.path.abspath(args.scans_dir), "scales.json") if args.scans_dir else ""
 
     metas: List[Dict[str, Any]] = []
     if args.source in ("synthetic", "all"):
@@ -652,11 +979,96 @@ if __name__ == "__main__":
     if args.source in ("real", "all"):
         metas.extend(load_real_bridges(args.real_dir))
 
+    if args.ids:
+        wanted = {x.strip() for x in args.ids.split(",") if x.strip()}
+        metas = [m for m in metas if m["id"] in wanted]
+        missing_ids = wanted - {m["id"] for m in metas}
+        if missing_ids:
+            print(f"Warning: ids not found in metadata: {sorted(missing_ids)}")
+
+    cache_paths = [p for p in (scales_output, scans_scales) if p]
+    scales_cache: Dict[str, Dict[str, Any]] = {}
+    for path in cache_paths:
+        scales_cache.update(load_scales_json(path))
+
+    def has_scale_source(object_id: str) -> bool:
+        rec = scales_cache.get(object_id)
+        if rec and rec.get("norm_radius_m") is not None:
+            return True
+        if args.source in ("real", "all"):
+            if os.path.isfile(os.path.join(args.real_dir, object_id, "parameters.json")):
+                return True
+        if args.source in ("synthetic", "all") and args.scans_dir:
+            if _merged_xyz_path(args.scans_dir, object_id):
+                return True
+        return False
+
+    selected: List[Dict[str, Any]] = []
+    skipped_no_scale: List[str] = []
+    for meta in metas:
+        if not has_scale_source(meta["id"]):
+            skipped_no_scale.append(meta["id"])
+            if args.scale_mode == "prompt":
+                continue
+        selected.append(meta)
+        if args.count is not None and len(selected) >= args.count:
+            break
+    metas = selected
+
+    scales = collect_scales(
+        [m["id"] for m in metas],
+        scans_dir=args.scans_dir if args.source in ("synthetic", "all") else None,
+        real_dir=args.real_dir if args.source in ("real", "all") else None,
+        cache_paths=cache_paths,
+    )
+    used_scales = {oid: scales[oid] for oid in [m["id"] for m in metas] if oid in scales}
+    if used_scales:
+        save_scales_json(scales_output, {**load_scales_json(scales_output), **used_scales})
+        if scans_scales and args.source in ("synthetic", "all"):
+            save_scales_json(scans_scales, {**load_scales_json(scans_scales), **{
+                oid: rec for oid, rec in used_scales.items()
+                if rec.get("source") != "parameters.json"
+            }})
+
+    if skipped_no_scale:
+        preview = ", ".join(skipped_no_scale[:8])
+        extra = f" (+{len(skipped_no_scale) - 8} more)" if len(skipped_no_scale) > 8 else ""
+        print(
+            f"No norm_radius_m for {len(skipped_no_scale)} bridge(s) "
+            f"(no merged XYZ / parameters.json): {preview}{extra}"
+        )
+        if args.scale_mode == "prompt":
+            print("Those were skipped because --scale-mode prompt requires a radius.")
+
     if args.count is not None:
-        metas = metas[: args.count]
         print(f"Processing {len(metas)} bridges (limited by --count)...")
     else:
-        print(f"Processing all {len(metas)} bridges...")
+        print(f"Processing {len(metas)} bridges...")
+
+    if not metas:
+        print("Nothing to process.")
+        raise SystemExit(1)
+
+    if args.dry_run:
+        print(f"\n{'='*60}")
+        print(f"DRY RUN  scale_mode={args.scale_mode}  apply_scale_to={args.apply_scale_to}")
+        print(f"{'='*60}")
+        for meta in metas:
+            radius = (scales.get(meta["id"]) or {}).get("norm_radius_m")
+            print(f"\n{meta['id']}")
+            print(f"  metadata: { {k: v for k, v in meta.items() if k not in ('id', 'domain')} }")
+            if radius is None:
+                print("  norm_radius_m: MISSING")
+                continue
+            print(f"  norm_radius_m: {float(radius):.3f} m  → caption {float(radius):.1f} m")
+            example = inject_scale_sentence(
+                "<point>\nWhat is the total length of the bridge?",
+                float(radius),
+            )
+            print(f"  L1 human turn:\n    {example.replace(chr(10), chr(10) + '    ')}")
+        print(f"\nWould write captions to {out_dir}")
+        print(f"Would write scales to {scales_output}")
+        raise SystemExit(0)
 
     def load_existing(path: str) -> List[Dict[str, Any]]:
         """Reuse finished bridges so a restart never re-pays for them."""
@@ -681,6 +1093,14 @@ if __name__ == "__main__":
         )
     errors: List[str] = []
 
+    def maybe_scale(record: Dict[str, Any]) -> Dict[str, Any]:
+        if args.scale_mode != "prompt":
+            return record
+        radius = (scales.get(record["object_id"]) or {}).get("norm_radius_m")
+        if radius is None:
+            raise RuntimeError(f"No norm_radius_m for {record['object_id']}")
+        return apply_scale_to_record(record, float(radius), args.apply_scale_to)
+
     def save_outputs() -> None:
         # tmp + replace, because an interrupt during the write would leave a
         # truncated file that the next run could not resume from
@@ -699,12 +1119,19 @@ if __name__ == "__main__":
 
         print(f"\n{'='*60}")
         print(f"Processing {meta['id']}...")
+        radius = (scales.get(meta["id"]) or {}).get("norm_radius_m")
+        if radius is not None:
+            print(f"norm_radius_m = {float(radius):.3f} m")
         print(f"{'='*60}")
 
         if need_simple:
             try:
                 print("Generating simple description...")
-                simple_descriptions.append(generate_simple_description(meta))
+                if args.template:
+                    simple_rec, _ = template_caption_records(meta, radius)
+                    simple_descriptions.append(simple_rec)
+                else:
+                    simple_descriptions.append(maybe_scale(generate_simple_description(meta)))
                 print(f"Generated simple description for {meta['id']}")
             except Exception as e:
                 print(f"Failed to generate simple description: {e}")
@@ -713,9 +1140,15 @@ if __name__ == "__main__":
         if need_complex:
             try:
                 print("Generating complex instructions...")
-                complex_convs = generate_complex_instructions(meta)
-                complex_instructions.extend(complex_convs)
-                print(f"Generated {len(complex_convs)} complex conversations for {meta['id']}")
+                if args.template:
+                    _, complex_convs = template_caption_records(meta, radius)
+                    complex_instructions.extend(complex_convs)
+                else:
+                    complex_convs = [
+                        maybe_scale(conv) for conv in generate_complex_instructions(meta)
+                    ]
+                    complex_instructions.extend(complex_convs)
+                print(f"Generated complex conversations for {meta['id']}")
             except Exception as e:
                 print(f"Failed to generate complex instructions: {e}")
                 errors.append(f"[bridge {meta['id']}] complex instructions: {e}")
@@ -731,6 +1164,7 @@ if __name__ == "__main__":
     print(f"\n{'='*60}")
     print(f"Saved {len(simple_descriptions)} simple descriptions to {simple_output}")
     print(f"Saved {len(complex_instructions)} complex instructions to {complex_output}")
+    print(f"Saved scales to {scales_output}")
     print(f"{'='*60}")
     print(f"\nComplete! Total conversations: {len(simple_descriptions) + len(complex_instructions)}")
     print("COST SUMMARY")
