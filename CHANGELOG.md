@@ -14,7 +14,7 @@ New geometry, fitted to 32 measured real bridges.
 - Ground and embankment in the scene, removed from the point cloud
 - Scanner heights relative to deck and ground
 - Fixed semantic labels (class order was shifted by one)
-- Templated captions with fixed questions
+- Templated captions with fixed questions. No radius in the captions, it is in `scales.json`
 - `--seed` option for reproducible runs
 
 Not compatible with v1 data: `bridge_type` is now `slab|girder`, new fields `family`, `span_layout_m`, `abutment_style`.

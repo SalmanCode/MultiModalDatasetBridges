@@ -960,8 +960,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--scale-mode",
         choices=["none", "prompt"],
-        default="prompt",
-        help="none = L0 captions; prompt = L1 radius sentence in questions (default)",
+        default="none",
+        help="none = no radius in captions (default); prompt = radius sentence in questions",
     )
     parser.add_argument(
         "--apply-scale-to",
@@ -1155,6 +1155,8 @@ if __name__ == "__main__":
         print(f"\n{'='*60}")
         print(f"Processing {meta['id']}...")
         radius = (scales.get(meta["id"]) or {}).get("norm_radius_m")
+        if args.scale_mode != "prompt":
+            radius = None
         if radius is not None:
             print(f"norm_radius_m = {float(radius):.3f} m")
         print(f"{'='*60}")

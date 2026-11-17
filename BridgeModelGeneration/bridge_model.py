@@ -9,8 +9,6 @@ logger = logging.getLogger(__name__)
 
 
 
-
-
 # scene-only components, dropped from the point cloud
 NON_STRUCTURE_COMPONENTS = ("ground",)
 
